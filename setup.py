@@ -11,10 +11,11 @@ class PostInstallCommand(_install):
     def run(self):
         _install.run(self)
 
-        # Only run setup on actual pip install, not during wheel builds
-        # Check if we're being run as part of a pip install (not a build)
-        import os
-        if "pip" in os.environ.get("_", ""):
+        # Run setup wizard after installation
+        import sys
+
+        # Only run if interactive terminal (not in CI/automation)
+        if hasattr(sys.stdin, 'isatty') and sys.stdin.isatty():
             try:
                 print("\n" + "="*80)
                 print("WiFi Failover Utility - Setup Wizard")
@@ -22,11 +23,28 @@ class PostInstallCommand(_install):
                 print("Running interactive setup...\n")
 
                 from wifi_failover.cli import setup_interactive
-                setup_interactive()
-            except Exception:
-                # If setup fails, just warn but don't crash install
-                print("\n⚠️  Setup wizard couldn't launch automatically.")
-                print("You can run it later with: wifi-failover setup\n")
+                success = setup_interactive()
+
+                if success:
+                    print("\n✅ Setup complete! Configuration saved.")
+                    print("\nNext steps:")
+                    print("  1. Install the Android app")
+                    print("  2. The daemon will auto-start on login")
+                    print("\nRun 'wifi-failover status' to check configuration\n")
+                else:
+                    print("\n⚠️  Setup cancelled. You can run it later with:")
+                    print("  wifi-failover setup\n")
+
+            except KeyboardInterrupt:
+                print("\n\n⏹️  Setup cancelled. You can run it later with:")
+                print("  wifi-failover setup\n")
+            except Exception as e:
+                print(f"\n⚠️  Setup wizard error: {e}")
+                print("You can run setup later with: wifi-failover setup\n")
+        else:
+            # Non-interactive (CI/automation) - just skip
+            print("Non-interactive install detected. Skipping setup wizard.")
+            print("Run 'wifi-failover setup' to configure.\n")
 
 
 setup(
