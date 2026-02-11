@@ -133,12 +133,13 @@ class WiFiFailoverMonitor:
                 timeout=10
             )
             if response.status_code == 200:
+                self.logger.info("♥ Heartbeat sent")
                 return True
             else:
-                self.logger.debug(f"Heartbeat failed: {response.status_code}")
+                self.logger.warning(f"Heartbeat failed: {response.status_code}")
                 return False
         except Exception as e:
-            self.logger.debug(f"Error sending heartbeat: {e}")
+            self.logger.warning(f"Error sending heartbeat: {e}")
             return False
 
     def _heartbeat_loop(self):
