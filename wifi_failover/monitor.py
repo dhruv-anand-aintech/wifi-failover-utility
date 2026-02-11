@@ -107,41 +107,6 @@ class WiFiFailoverMonitor:
             self.logger.error(f"Error checking connectivity: {e}")
             return False
 
-    def trigger_hotspot_failover(self) -> bool:
-        """Tell Android phone to enable hotspot via Cloudflare Worker"""
-        try:
-            response = requests.post(
-                f"{self.worker_url}/api/command/enable",
-                json={"secret": self.worker_secret},
-                timeout=10
-            )
-            if response.status_code == 200:
-                self.logger.info("Hotspot failover triggered")
-                return True
-            else:
-                self.logger.error(f"Failed to trigger hotspot: {response.status_code}")
-                return False
-        except Exception as e:
-            self.logger.error(f"Error triggering hotspot: {e}")
-            return False
-
-    def disable_hotspot_command(self) -> bool:
-        """Tell Android to disable hotspot"""
-        try:
-            response = requests.post(
-                f"{self.worker_url}/api/command/disable",
-                json={"secret": self.worker_secret},
-                timeout=10
-            )
-            if response.status_code == 200:
-                self.logger.info("Hotspot disable command sent")
-                return True
-            else:
-                self.logger.error(f"Failed to disable hotspot: {response.status_code}")
-                return False
-        except Exception as e:
-            self.logger.error(f"Error disabling hotspot: {e}")
-            return False
 
     def send_heartbeat(self) -> bool:
         """Send heartbeat to Cloudflare Worker to indicate daemon is alive"""
@@ -197,44 +162,6 @@ class WiFiFailoverMonitor:
             self.heartbeat_thread.join(timeout=2)
             self.logger.info("Heartbeat thread stopped")
 
-    def connect_to_hotspot(self) -> bool:
-        """Connect Mac to phone's hotspot"""
-        try:
-            self.logger.info(f"Attempting to connect to {self.hotspot_ssid}...")
-
-            # Try to get password from Keychain
-            try:
-                password = subprocess.run(
-                    ["security", "find-generic-password", "-wa", self.hotspot_ssid],
-                    capture_output=True,
-                    text=True,
-                    timeout=5
-                ).stdout.strip()
-
-                if password:
-                    result = subprocess.run(
-                        ["networksetup", "-setairportnetwork", "en0", self.hotspot_ssid, password],
-                        capture_output=True,
-                        text=True,
-                        timeout=15
-                    )
-                    if result.returncode == 0:
-                        self.logger.info(f"Connected to {self.hotspot_ssid}")
-                        return True
-                    else:
-                        self.logger.error(f"Connection failed: {result.stderr}")
-                        return False
-                else:
-                    self.logger.error(f"No password found in Keychain for {self.hotspot_ssid}")
-                    return False
-            except Exception as e:
-                self.logger.error(f"Error getting password from Keychain: {e}")
-                return False
-
-        except Exception as e:
-            self.logger.error(f"Error connecting to hotspot: {e}")
-            return False
-
     def monitor_network(self):
         """Main monitoring loop"""
         self.logger.info(f"Starting WiFi failover monitor")
@@ -246,8 +173,6 @@ class WiFiFailoverMonitor:
         self.start_heartbeat_thread()
 
         failure_count = 0
-        recovery_count = 0
-        failover_active = False
         last_status_log = time.time()
         last_internet_state = None
 
@@ -268,44 +193,17 @@ class WiFiFailoverMonitor:
 
                 if should_log_status:
                     status_msg = "🟢 ONLINE" if is_connected else "🔴 OFFLINE"
-                    self.logger.info(f"Internet: {status_msg}, Failover: {failover_active}")
+                    self.logger.info(f"Internet: {status_msg}")
                     last_internet_state = is_connected
 
-                # Check internet connectivity regardless of network
+                # Check internet connectivity - just report status
                 if is_connected:
                     # Internet is working
                     failure_count = 0
-                    recovery_count += 1
-
-                    # If we had a failover active and now recovered, disable it
-                    if failover_active and recovery_count >= self.recovery_threshold:
-                        self.logger.info("Internet restored, disabling hotspot failover")
-                        self.disable_hotspot_command()
-                        failover_active = False
-                        recovery_count = 0
                 else:
                     # Internet is down
-                    recovery_count = 0
                     failure_count += 1
-
-                    if failure_count >= self.failure_threshold and not failover_active:
-                        self.logger.warning(
-                            f"Internet connectivity lost ({failure_count} failures), triggering failover"
-                        )
-
-                        # Step 1: Tell Android to enable hotspot
-                        if self.trigger_hotspot_failover():
-                            # Step 2: Wait for hotspot to come up
-                            self.logger.info("Waiting for hotspot to activate...")
-                            time.sleep(5)
-
-                            # Step 3: Connect to hotspot
-                            if self.connect_to_hotspot():
-                                failover_active = True
-                                failure_count = 0
-                                self.logger.info("Failover complete, connected to hotspot")
-                            else:
-                                self.logger.error("Failed to connect to hotspot")
+                    # Daemon just reports status via heartbeat, Android app handles failover
 
                 time.sleep(self.check_interval)
 
