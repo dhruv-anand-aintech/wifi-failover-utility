@@ -35,6 +35,7 @@ class WiFiFailoverMonitor:
         self.heartbeat_thread = None
         self.heartbeat_stop = threading.Event()
         self.heartbeat_count = 0
+        self.last_lock_status = None  # Track lock status for change detection
 
         # Setup logging
         if log_dir is None:
@@ -56,9 +57,9 @@ class WiFiFailoverMonitor:
     def is_screen_locked(self) -> bool:
         """Check if macOS screen is locked or sleeping"""
         try:
-            # Check if screen saver or loginwindow is active (indicates lock/sleep)
+            # Check if ScreenSaverEngine is running (indicates lock or screensaver active)
             pgrep_result = subprocess.run(
-                ["pgrep", "-x", "loginwindow"],
+                ["pgrep", "-x", "ScreenSaverEngine"],
                 capture_output=True,
                 timeout=5
             )
@@ -146,6 +147,14 @@ class WiFiFailoverMonitor:
             is_locked = self.is_screen_locked()
             status = "paused" if is_locked else "active"
 
+            # Log immediately when lock status changes
+            if self.last_lock_status is None or is_locked != self.last_lock_status:
+                if is_locked:
+                    self.logger.info("🔒 Screen LOCKED - sending 'paused' status")
+                else:
+                    self.logger.info("🔓 Screen UNLOCKED - sending 'active' status")
+                self.last_lock_status = is_locked
+
             response = requests.post(
                 f"{self.worker_url}/api/heartbeat",
                 json={"secret": self.worker_secret, "status": status},
@@ -153,7 +162,7 @@ class WiFiFailoverMonitor:
             )
             if response.status_code == 200:
                 self.heartbeat_count += 1
-                # Log every 10th heartbeat (~50 seconds)
+                # Log every 10th heartbeat (~20 seconds)
                 if self.heartbeat_count % 10 == 0:
                     self.logger.info(f"♥ Heartbeats sent ({self.heartbeat_count}), status: {status}")
                 return True
