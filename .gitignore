@@ -46,3 +46,10 @@ config.json
 # Configuration files with secrets (never commit)
 *.secret
 wrangler.toml
+
+# Android build files (local machine configuration)
+local.properties
+gradle.properties
+android-app/.gradle/
+android-app/build/
+android-app/.idea/
