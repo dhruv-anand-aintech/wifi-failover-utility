@@ -1,6 +1,7 @@
 """Interactive CLI for WiFi Failover Utility setup"""
 
 import argparse
+import requests
 from pathlib import Path
 from .config import Config, get_available_networks, get_current_network
 from .tasker_instructions import save_tasker_instructions, get_tasker_setup_guide
@@ -259,6 +260,48 @@ def show_tasker_guide():
     print(get_tasker_setup_guide(worker_url, worker_secret))
 
 
+def test_failover():
+    """Test the failover system without actual network failure"""
+    config = Config()
+    worker_url = config.get_worker_url()
+    worker_secret = config.get_worker_secret()
+
+    if not worker_url or not worker_secret:
+        print("❌ Configuration incomplete. Run 'wifi-failover setup' first.")
+        return
+
+    print_section("Testing WiFi Failover System")
+    print()
+    print("Step 1: Sending failover command to Worker...")
+
+    try:
+        response = requests.post(
+            f"{worker_url}/api/command/enable",
+            json={"secret": worker_secret},
+            timeout=10
+        )
+        if response.status_code == 200:
+            print("✅ Failover command sent to Worker successfully")
+            print()
+            print("Step 2: Check your Android app debug log...")
+            print("   - Open the WiFi Failover app")
+            print("   - Look at the Debug Log at the bottom")
+            print("   - You should see: 'Poll: enabled=true'")
+            print()
+            print("Step 3: App should automatically enable hotspot...")
+            print("   - If Device Admin is enabled, hotspot should turn on")
+            print("   - You'll see a notification: 'Hotspot enabled - connect your computer'")
+            print()
+            print("Step 4: Daemon will connect to hotspot (requires password in Keychain)")
+            print()
+            print(f"Worker: {worker_url}")
+            print(f"Hotspot SSID: {config.get_hotspot_ssid()}")
+        else:
+            print(f"❌ Failed to send command: {response.status_code}")
+    except Exception as e:
+        print(f"❌ Error: {e}")
+
+
 def main():
     """Main CLI entry point"""
     parser = argparse.ArgumentParser(
@@ -278,6 +321,9 @@ def main():
     # Tasker guide command
     subparsers.add_parser("tasker-guide", help="Show Tasker setup instructions")
 
+    # Test failover command
+    subparsers.add_parser("test-failover", help="Test failover without network failure")
+
     args = parser.parse_args()
 
     if args.command == "setup":
@@ -288,6 +334,8 @@ def main():
         show_status()
     elif args.command == "tasker-guide":
         show_tasker_guide()
+    elif args.command == "test-failover":
+        test_failover()
     else:
         parser.print_help()
 

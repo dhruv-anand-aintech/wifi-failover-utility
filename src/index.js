@@ -20,6 +20,11 @@ export default {
       return handleCommand(request, env, "disable");
     }
 
+    // Daemon heartbeat
+    if (path === "/api/heartbeat" && request.method === "POST") {
+      return handleHeartbeat(request, env);
+    }
+
     // Status check
     if (path === "/api/status" && request.method === "GET") {
       return handleStatus(env);
@@ -87,13 +92,64 @@ async function handleCommand(request, env, action) {
   }
 }
 
+async function handleHeartbeat(request, env) {
+  try {
+    const body = await request.json();
+
+    // Validate secret
+    if (body.secret !== FAILOVER_SECRET) {
+      return new Response(
+        JSON.stringify({ error: "Invalid secret" }),
+        { status: 403, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    // Store daemon heartbeat
+    const heartbeat = {
+      timestamp: Date.now(),
+      daemon_alive: true
+    };
+
+    await env.WIFI_FAILOVER.put("daemon_heartbeat", JSON.stringify(heartbeat), {
+      expirationTtl: 600,  // Expire after 10 minutes
+      metadata: { created: Date.now() }
+    });
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        message: "Heartbeat received",
+        timestamp: heartbeat.timestamp
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } }
+    );
+  } catch (error) {
+    return new Response(
+      JSON.stringify({ error: error.message }),
+      { status: 500, headers: { "Content-Type": "application/json" } }
+    );
+  }
+}
+
 async function handleStatus(env) {
   try {
+    // Check daemon heartbeat
+    const heartbeatStr = await env.WIFI_FAILOVER.get("daemon_heartbeat");
+    const heartbeat = heartbeatStr ? JSON.parse(heartbeatStr) : {};
+
+    const HEARTBEAT_TIMEOUT = 15000; // 15 seconds
+    const now = Date.now();
+    const lastHeartbeat = heartbeat.timestamp || 0;
+    const daemon_online = (now - lastHeartbeat) < HEARTBEAT_TIMEOUT;
+
     const commandStr = await env.WIFI_FAILOVER.get("command");
     const command = commandStr ? JSON.parse(commandStr) : {};
 
     return new Response(
       JSON.stringify({
+        daemon_online: daemon_online,
+        daemon_last_heartbeat: lastHeartbeat,
+        time_since_heartbeat: now - lastHeartbeat,
         hotspot_enabled: command.hotspot_enabled || false,
         timestamp: command.timestamp || null,
         mac_acknowledged: command.mac_acknowledged || false
@@ -110,9 +166,14 @@ async function handleStatus(env) {
 
 async function handleAcknowledge(request, env) {
   try {
-    const body = request.formData
-      ? Object.fromEntries(await request.formData())
-      : await request.json();
+    let body;
+    const contentType = request.headers.get("content-type") || "";
+
+    if (contentType.includes("application/json")) {
+      body = await request.json();
+    } else {
+      body = Object.fromEntries(await request.formData());
+    }
 
     // Validate secret
     if (body.secret !== FAILOVER_SECRET) {
