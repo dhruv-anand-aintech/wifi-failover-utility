@@ -32,10 +32,10 @@ Automatic failover from WiFi to Android hotspot. When your primary WiFi network 
 
 ```bash
 # Using pip
-pip install git+https://github.com/yourusername/wifi-failover-utility.git
+pip install git+https://github.com/dhruv-anand-aintech/wifi-failover-utility.git
 
 # Or using uv
-uv pip install git+https://github.com/yourusername/wifi-failover-utility.git
+uv pip install git+https://github.com/dhruv-anand-aintech/wifi-failover-utility.git
 ```
 
 ### 2. Run setup wizard

@@ -117,12 +117,12 @@ curl https://wifi-failover-youraccount.workers.dev/health
 ### Install the Package
 
 ```bash
-pip install git+https://github.com/yourusername/wifi-failover-utility.git
+pip install git+https://github.com/dhruv-anand-aintech/wifi-failover-utility.git
 ```
 
 Or with uv:
 ```bash
-uv pip install git+https://github.com/yourusername/wifi-failover-utility.git
+uv pip install git+https://github.com/dhruv-anand-aintech/wifi-failover-utility.git
 ```
 
 ### Run Setup Wizard
@@ -333,20 +333,15 @@ tail -f /tmp/wifi-failover/monitor.log
 
 ---
 
-## Next: Push to GitHub
+## GitHub Repository
 
-Once everything is working, push to GitHub:
+The package is ready to use:
 
+**Repository:** https://github.com/dhruv-anand-aintech/wifi-failover-utility
+
+**Install with:**
 ```bash
-cd /Users/dhruvanand/Code/wifi-failover-utility
-git remote add origin https://github.com/yourusername/wifi-failover-utility.git
-git branch -M main
-git push -u origin main
-```
-
-Then update `setup.py`:
-```python
-url="https://github.com/yourusername/wifi-failover-utility",
+pip install git+https://github.com/dhruv-anand-aintech/wifi-failover-utility.git
 ```
 
 ---

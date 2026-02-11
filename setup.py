@@ -10,7 +10,7 @@ setup(
     description="Automatic WiFi failover to Android hotspot with Tasker integration",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/yourusername/wifi-failover-utility",
+    url="https://github.com/dhruv-anand-aintech/wifi-failover-utility",
     packages=find_packages(),
     classifiers=[
         "Programming Language :: Python :: 3",
