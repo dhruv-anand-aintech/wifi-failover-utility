@@ -28,37 +28,36 @@ Automatic failover from WiFi to Android hotspot. When your primary WiFi network 
 
 ## Quick Start
 
-### 1. Install the package
+### Option 1: Run Setup Directly (Fastest)
 
 ```bash
-# Using pip
-pip install git+https://github.com/dhruv-anand-aintech/wifi-failover-utility.git
+# Clone the repo
+git clone https://github.com/dhruv-anand-aintech/wifi-failover-utility.git
+cd wifi-failover-utility
 
-# Or using uv
+# Run setup with uv (no installation needed!)
+uv run wifi_failover_setup.py
+```
+
+### Option 2: Install Package First
+
+**Using pip:**
+```bash
+pip install git+https://github.com/dhruv-anand-aintech/wifi-failover-utility.git
+```
+
+**Using uv:**
+```bash
 uv pip install git+https://github.com/dhruv-anand-aintech/wifi-failover-utility.git
 ```
 
-### 2. Run setup wizard
-
-```bash
-wifi-failover setup
-```
-
-This interactive wizard will:
-- Auto-detect available WiFi networks on your Mac
-- Ask which networks to monitor
-- Request your phone's hotspot SSID
-- Prompt for Cloudflare Worker credentials
-- Save hotspot password to Keychain
-- Start the daemon automatically (optional)
-
-### 3. Deploy Cloudflare Worker (if you don't have one)
+### Step 3: Deploy Cloudflare Worker (if you don't have one)
 
 See [CLOUDFLARE_SETUP.md](CLOUDFLARE_SETUP.md) for detailed instructions.
 
 The Worker URL and secret will be used in the setup wizard.
 
-### 4. Install Android App
+### Step 4: Install Android App
 
 ```bash
 # Build and install the native app
@@ -80,13 +79,14 @@ adb install android-app/app/build/outputs/apk/debug/app-debug.apk
 
 See [android-app/README.md](android-app/README.md) for detailed instructions.
 
-### 5. Start monitoring
+### Step 5: Start Monitoring
 
+After setup completes, the daemon will start automatically.
+
+Or start manually:
 ```bash
-# Test it first (runs in foreground)
-wifi-failover start
-
-# For background daemon, see Installation section below
+wifi-failover start     # Foreground (for testing)
+wifi-failover daemon    # Background
 ```
 
 ## Installation as Daemon
