@@ -126,7 +126,7 @@ class WiFiFailoverMonitor:
             response = requests.post(
                 f"{self.worker_url}/api/heartbeat",
                 json={"secret": self.worker_secret, "status": status},
-                timeout=10
+                timeout=15
             )
             if response.status_code == 200:
                 self.heartbeat_count += 1
