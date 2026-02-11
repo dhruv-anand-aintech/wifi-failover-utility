@@ -165,10 +165,10 @@ class WiFiFailoverMonitor:
             return False
 
     def _heartbeat_loop(self):
-        """Background thread that sends heartbeats every 5 seconds"""
+        """Background thread that sends heartbeats every 2 seconds"""
         while not self.heartbeat_stop.is_set():
             self.send_heartbeat()
-            time.sleep(5)
+            time.sleep(2)
 
     def start_heartbeat_thread(self):
         """Start background thread for sending heartbeats"""

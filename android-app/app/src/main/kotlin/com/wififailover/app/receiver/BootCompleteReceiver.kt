@@ -23,7 +23,7 @@ class BootCompleteReceiver : BroadcastReceiver() {
 
     private fun schedulePollingWork(context: Context) {
         val workRequest = PeriodicWorkRequestBuilder<WiFiFailoverWorker>(
-            10,
+            5,
             TimeUnit.SECONDS
         ).build()
 
