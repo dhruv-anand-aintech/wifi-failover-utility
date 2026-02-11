@@ -87,6 +87,13 @@ class MainActivity : AppCompatActivity() {
         checkDeviceAdmin()
         addDebugLog("App started")
 
+        // Reschedule WorkManager if monitoring was enabled
+        // (in case app was killed/restarted - WorkManager tasks don't persist)
+        if (preferences.monitoringEnabled && preferences.isConfigured()) {
+            scheduleWorkManager()
+            addDebugLog("Rescheduled WorkManager (app restart)")
+        }
+
         // Update status display
         updateStatus()
     }
@@ -208,6 +215,13 @@ class MainActivity : AppCompatActivity() {
 
     private fun startMonitoring() {
         preferences.monitoringEnabled = true
+        scheduleWorkManager()
+        addDebugLog("▶ Monitoring started (WorkManager background service)")
+        Toast.makeText(this, "Monitoring started", Toast.LENGTH_SHORT).show()
+        updateStatus()
+    }
+
+    private fun scheduleWorkManager() {
         // Schedule background polling via WorkManager (runs every 5 seconds)
         val workRequest = PeriodicWorkRequestBuilder<WiFiFailoverWorker>(
             5,
@@ -219,9 +233,6 @@ class MainActivity : AppCompatActivity() {
             ExistingPeriodicWorkPolicy.KEEP,
             workRequest
         )
-        addDebugLog("▶ Monitoring started (WorkManager background service)")
-        Toast.makeText(this, "Monitoring started", Toast.LENGTH_SHORT).show()
-        updateStatus()
     }
 
     private fun stopMonitoring() {
