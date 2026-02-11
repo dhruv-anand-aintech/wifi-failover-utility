@@ -53,6 +53,20 @@ class WiFiFailoverMonitor:
         )
         self.logger = logging.getLogger(__name__)
 
+    def is_screen_locked(self) -> bool:
+        """Check if macOS screen is locked or sleeping"""
+        try:
+            # Check if screen saver or loginwindow is active (indicates lock/sleep)
+            pgrep_result = subprocess.run(
+                ["pgrep", "-x", "loginwindow"],
+                capture_output=True,
+                timeout=5
+            )
+            return pgrep_result.returncode == 0
+        except Exception:
+            # If we can't determine, assume not locked (safe default)
+            return False
+
     def get_current_network(self) -> str:
         """Get currently connected WiFi network name"""
         try:
@@ -128,16 +142,20 @@ class WiFiFailoverMonitor:
     def send_heartbeat(self) -> bool:
         """Send heartbeat to Cloudflare Worker to indicate daemon is alive"""
         try:
+            # Check if screen is locked - if so, send "paused" status
+            is_locked = self.is_screen_locked()
+            status = "paused" if is_locked else "active"
+
             response = requests.post(
                 f"{self.worker_url}/api/heartbeat",
-                json={"secret": self.worker_secret},
+                json={"secret": self.worker_secret, "status": status},
                 timeout=10
             )
             if response.status_code == 200:
                 self.heartbeat_count += 1
                 # Log every 10th heartbeat (~50 seconds)
                 if self.heartbeat_count % 10 == 0:
-                    self.logger.info(f"♥ Heartbeats sent ({self.heartbeat_count})")
+                    self.logger.info(f"♥ Heartbeats sent ({self.heartbeat_count}), status: {status}")
                 return True
             else:
                 self.logger.warning(f"Heartbeat failed: {response.status_code}")
@@ -194,6 +212,9 @@ class WiFiFailoverMonitor:
                     else:
                         self.logger.error(f"Connection failed: {result.stderr}")
                         return False
+                else:
+                    self.logger.error(f"No password found in Keychain for {self.hotspot_ssid}")
+                    return False
             except Exception as e:
                 self.logger.error(f"Error getting password from Keychain: {e}")
                 return False

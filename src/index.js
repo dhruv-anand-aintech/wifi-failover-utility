@@ -104,10 +104,11 @@ async function handleHeartbeat(request, env) {
       );
     }
 
-    // Store daemon heartbeat
+    // Store daemon heartbeat with status (active or paused)
     const heartbeat = {
       timestamp: Date.now(),
-      daemon_alive: true
+      daemon_alive: true,
+      status: body.status || "active"  // active or paused
     };
 
     await env.WIFI_FAILOVER.put("daemon_heartbeat", JSON.stringify(heartbeat), {
@@ -119,7 +120,8 @@ async function handleHeartbeat(request, env) {
       JSON.stringify({
         success: true,
         message: "Heartbeat received",
-        timestamp: heartbeat.timestamp
+        timestamp: heartbeat.timestamp,
+        status: heartbeat.status
       }),
       { status: 200, headers: { "Content-Type": "application/json" } }
     );
@@ -140,16 +142,26 @@ async function handleStatus(env) {
     const HEARTBEAT_TIMEOUT = 15000; // 15 seconds
     const now = Date.now();
     const lastHeartbeat = heartbeat.timestamp || 0;
-    const daemon_online = (now - lastHeartbeat) < HEARTBEAT_TIMEOUT;
+    const timeSinceHeartbeat = now - lastHeartbeat;
+
+    // Determine daemon status
+    let daemon_status = "offline";
+    if (timeSinceHeartbeat < HEARTBEAT_TIMEOUT) {
+      // Daemon is responsive
+      daemon_status = heartbeat.status === "paused" ? "paused" : "online";
+    }
+
+    const daemon_online = daemon_status === "online";
 
     const commandStr = await env.WIFI_FAILOVER.get("command");
     const command = commandStr ? JSON.parse(commandStr) : {};
 
     return new Response(
       JSON.stringify({
-        daemon_online: daemon_online,
+        daemon_status: daemon_status,  // "online", "paused", or "offline"
+        daemon_online: daemon_online,  // true only if "online"
         daemon_last_heartbeat: lastHeartbeat,
-        time_since_heartbeat: now - lastHeartbeat,
+        time_since_heartbeat: timeSinceHeartbeat,
         hotspot_enabled: command.hotspot_enabled || false,
         timestamp: command.timestamp || null,
         mac_acknowledged: command.mac_acknowledged || false
