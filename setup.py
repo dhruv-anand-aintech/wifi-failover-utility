@@ -6,7 +6,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="wifi-failover-utility",
-    version="0.3.1",
+    version="0.3.2",
     author="Dhruv Anand",
     description="Automatic WiFi failover to Android hotspot with native app and lock/sleep detection",
     long_description=long_description,
