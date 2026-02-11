@@ -94,10 +94,18 @@ async function handleCommand(request, env, action) {
 
 async function handleHeartbeat(request, env) {
   try {
-    const body = await request.json();
+    let body;
+    try {
+      body = await request.json();
+    } catch (parseError) {
+      return new Response(
+        JSON.stringify({ error: "Invalid JSON: " + parseError.message }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
+    }
 
     // Validate secret
-    if (body.secret !== FAILOVER_SECRET) {
+    if (!body.secret || body.secret !== FAILOVER_SECRET) {
       return new Response(
         JSON.stringify({ error: "Invalid secret" }),
         { status: 403, headers: { "Content-Type": "application/json" } }
@@ -111,10 +119,17 @@ async function handleHeartbeat(request, env) {
       status: body.status || "active"  // active or paused
     };
 
-    await env.WIFI_FAILOVER.put("daemon_heartbeat", JSON.stringify(heartbeat), {
-      expirationTtl: 600,  // Expire after 10 minutes
-      metadata: { created: Date.now() }
-    });
+    try {
+      await env.WIFI_FAILOVER.put("daemon_heartbeat", JSON.stringify(heartbeat), {
+        expirationTtl: 600,  // Expire after 10 minutes
+        metadata: { created: Date.now() }
+      });
+    } catch (kvError) {
+      return new Response(
+        JSON.stringify({ error: "KV storage error: " + kvError.message }),
+        { status: 500, headers: { "Content-Type": "application/json" } }
+      );
+    }
 
     return new Response(
       JSON.stringify({
@@ -127,7 +142,7 @@ async function handleHeartbeat(request, env) {
     );
   } catch (error) {
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: "Unknown error: " + error.message }),
       { status: 500, headers: { "Content-Type": "application/json" } }
     );
   }
