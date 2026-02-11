@@ -18,7 +18,7 @@ class WiFiFailoverMonitor:
         hotspot_ssid: str,
         worker_url: str,
         worker_secret: str,
-        check_interval: int = 30,
+        check_interval: int = 5,
         failure_threshold: int = 2,
         recovery_threshold: int = 3,
         log_dir: Optional[str] = None
