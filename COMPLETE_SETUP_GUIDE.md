@@ -6,7 +6,12 @@ This guide walks you through setting up the complete WiFi failover system from s
 
 **For the impatient:**
 1. Deploy Cloudflare Worker (Part 1 below)
-2. Run one-line setup: `uv run https://raw.githubusercontent.com/dhruv-anand-aintech/wifi-failover-utility/main/wifi_failover_setup.py`
+2. Run setup:
+   ```bash
+   git clone https://github.com/dhruv-anand-aintech/wifi-failover-utility.git
+   cd wifi-failover-utility
+   uv run wifi_failover_setup.py
+   ```
 3. Install Android app (Part 3 below)
 
 **Total time: ~20-30 minutes**
