@@ -15,11 +15,16 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.NotificationCompat
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
 import com.wififailover.app.api.AcknowledgeRequest
 import com.wififailover.app.api.WorkerApi
 import com.wififailover.app.data.Preferences
 import com.wififailover.app.receiver.AdminReceiver
 import com.wififailover.app.service.HotspotService
+import com.wififailover.app.worker.WiFiFailoverWorker
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -41,7 +46,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var debugLog: TextView
 
     private val handler = Handler(Looper.getMainLooper())
-    private var pollingRunnable: Runnable? = null
     private lateinit var hotspotService: HotspotService
     private lateinit var devicePolicyManager: DevicePolicyManager
     private lateinit var adminComponent: ComponentName
@@ -208,31 +212,29 @@ class MainActivity : AppCompatActivity() {
 
     private fun startMonitoring() {
         preferences.monitoringEnabled = true
-        scheduleNextPoll()
-        addDebugLog("▶ Monitoring started (${preferences.pollingInterval}s interval)")
+        // Schedule background polling via WorkManager (runs every 10 seconds)
+        val workRequest = PeriodicWorkRequestBuilder<WiFiFailoverWorker>(
+            10,
+            TimeUnit.SECONDS
+        ).build()
+
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            "wifi_failover_polling",
+            ExistingPeriodicWorkPolicy.KEEP,
+            workRequest
+        )
+        addDebugLog("▶ Monitoring started (WorkManager background service)")
         Toast.makeText(this, "Monitoring started", Toast.LENGTH_SHORT).show()
         updateStatus()
     }
 
     private fun stopMonitoring() {
-        handler.removeCallbacks(pollingRunnable ?: return)
-        pollingRunnable = null
         preferences.monitoringEnabled = false
+        // Cancel background polling via WorkManager
+        WorkManager.getInstance(this).cancelUniqueWork("wifi_failover_polling")
         addDebugLog("⏸ Monitoring stopped")
         Toast.makeText(this, "Monitoring stopped", Toast.LENGTH_SHORT).show()
         updateStatus()
-    }
-
-    private fun scheduleNextPoll() {
-        if (!preferences.monitoringEnabled) return
-
-        pollingRunnable = Runnable {
-            pollWorker()
-            scheduleNextPoll()
-        }
-
-        val intervalMs = (preferences.pollingInterval * 1000).toLong()
-        handler.postDelayed(pollingRunnable!!, intervalMs)
     }
 
     private fun pollWorker() {
