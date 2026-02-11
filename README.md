@@ -9,11 +9,11 @@ Automatic failover from WiFi to Android hotspot. When your primary WiFi network 
 ├─ Post to Cloudflare Worker ───────────┤
 │  (triggers hotspot command)            │
 │                                        │
-├─ Android Tasker polls Worker ─────────┤
-│  (every 1-2 minutes)                   │
+├─ Android app polls Worker ────────────┤
+│  (Automate or Tasker, every 1-2 min)  │
 │                                        │
 ├─ Phone enables hotspot ───────────────┤
-│  (automatically via Tasker)            │
+│  (automatically via automation)        │
 │                                        │
 └─ Mac connects to hotspot ─────────────┘
    (using stored WiFi password)
@@ -22,7 +22,9 @@ Automatic failover from WiFi to Android hotspot. When your primary WiFi network 
 ## Requirements
 
 - **macOS** (tested on Big Sur+)
-- **Android phone** with Tasker app (~$3 from Google Play Store)
+- **Android phone** with either:
+  - **Automate** (free, recommended - easier)
+  - **Tasker** (~$3, more powerful)
 - **Cloudflare account** (free tier is sufficient)
 - **Python 3.8+**
 
@@ -50,7 +52,7 @@ This interactive wizard will:
 - Request your phone's hotspot SSID
 - Prompt for Cloudflare Worker credentials
 - Save hotspot password to Keychain
-- Generate Tasker setup instructions
+- Generate automation app setup instructions (Automate or Tasker)
 
 ### 3. Deploy Cloudflare Worker (if you don't have one)
 
@@ -58,20 +60,24 @@ See [CLOUDFLARE_SETUP.md](CLOUDFLARE_SETUP.md) for detailed instructions.
 
 The Worker URL and secret will be used in the setup wizard.
 
-### 4. Configure Tasker on Android
+### 4. Configure Android (Choose One)
 
+**Automate (Recommended - Easier):**
 ```bash
-# Show Tasker setup guide
-wifi-failover tasker-guide
+# Setup files automatically generated:
+open ~/Desktop/AUTOMATE_SETUP.txt
+```
+- Install Automate from Google Play Store
+- Follow the visual block-based setup (5 steps)
+- No complex scripting needed
 
-# Or open the generated file
+**Tasker (More Powerful):**
+```bash
 open ~/Desktop/TASKER_SETUP.txt
 ```
-
-Follow the step-by-step instructions to:
-- Enable Device Admin in Tasker
-- Create the monitoring task
-- Set up periodic polling (every 2 minutes)
+- Install Tasker from Google Play Store (~$3)
+- Enable Device Admin
+- Follow the task and profile setup (7 steps)
 
 ### 5. Start monitoring
 
@@ -153,11 +159,19 @@ wifi-failover tasker-guide
 - **GET** `/api/status` - Check command status
 - **POST** `/api/acknowledge` - Confirm action completed
 
-### Android Tasker
+### Android Automation (Automate or Tasker)
 
+**Automate (Visual blocks):**
+- Runs flow every 1-2 minutes (configurable)
+- GETs `/api/status` to check if hotspot should be enabled
+- Parses JSON response using visual blocks
+- If `hotspot_enabled = true`: enables hotspot
+- POSTs `/api/acknowledge` to confirm
+
+**Tasker (Script-based):**
 - Runs task every 1-2 minutes (configurable)
 - GETs `/api/status` to check if hotspot should be enabled
-- Parses JSON response
+- Parses JSON with JavaScript
 - If `hotspot_enabled = true`: enables hotspot
 - POSTs `/api/acknowledge` to confirm
 
@@ -178,9 +192,16 @@ tail -f /tmp/wifi-failover/monitor.log
 
 ### Hotspot not triggering
 
-- Verify Tasker Device Admin is enabled
-- Check Tasker profile is active
-- Run Tasker task manually (▶ button)
+**If using Automate:**
+- Verify flow toggle is enabled (blue) in flows list
+- Check flow in battery optimization settings
+- Tap flow → ▶ Play to manually test
+- Check flow history for errors
+
+**If using Tasker:**
+- Verify Device Admin is enabled
+- Check profile is active
+- Run task manually (▶ button)
 - Check battery optimization isn't blocking Tasker
 
 ### Can't connect to hotspot
