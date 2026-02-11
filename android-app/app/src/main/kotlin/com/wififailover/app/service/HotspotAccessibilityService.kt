@@ -15,6 +15,8 @@ class HotspotAccessibilityService : AccessibilityService() {
     private val checkRunnable = Runnable { checkAndClickHotspotToggle() }
     private var lastToggleClickTime = 0L
     private val TOGGLE_COOLDOWN_MS = 5000L // 5 second cooldown between toggle clicks
+    private var hotspotEnabledAt = 0L // Timestamp when hotspot was successfully enabled
+    private val HOTSPOT_STABLE_DURATION_MS = 2000L // Keep window closed for 2 seconds after successful enable
 
     override fun onServiceConnected() {
         Log.d(tag, "Accessibility service connected")
@@ -31,8 +33,24 @@ class HotspotAccessibilityService : AccessibilityService() {
         handler.postDelayed(checkRunnable, 500)
     }
 
+    private fun closeWindow() {
+        try {
+            performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
+            Log.d(tag, "Closed settings window")
+        } catch (e: Exception) {
+            Log.d(tag, "Could not close window: ${e.message}")
+        }
+    }
+
     private fun checkAndClickHotspotToggle() {
         try {
+            // If hotspot was recently enabled, don't keep opening settings
+            if (hotspotEnabledAt > 0 && System.currentTimeMillis() - hotspotEnabledAt < HOTSPOT_STABLE_DURATION_MS) {
+                Log.d(tag, "Hotspot recently enabled - skipping check for stability")
+                handler.postDelayed(checkRunnable, 500)
+                return
+            }
+
             val rootNode = rootInActiveWindow ?: run {
                 handler.postDelayed(checkRunnable, 500)
                 return
@@ -40,7 +58,6 @@ class HotspotAccessibilityService : AccessibilityService() {
 
             val packageName = rootNode.packageName?.toString() ?: ""
             if (packageName.contains("settings") || packageName.contains("wirelesssettings")) {
-                Log.d(tag, "Settings window detected: $packageName")
                 val allText = collectAllText(rootNode)
 
                 if (allText.contains("personal hotspot", ignoreCase = true) ||
@@ -59,11 +76,10 @@ class HotspotAccessibilityService : AccessibilityService() {
                         val isHotspotOn = afterHotspot.contains(" On", ignoreCase = true) ||
                                 afterHotspot.contains("\nOn", ignoreCase = true)
 
-                        Log.d(tag, "Personal hotspot state - ON: $isHotspotOn - Context: ${afterHotspot.take(60)}")
-
                         if (isHotspotOn) {
-                            Log.d(tag, "Personal hotspot is already ON, skipping toggle click")
-                            handler.postDelayed(checkRunnable, 500)
+                            Log.i(tag, "✅ Hotspot already ON - closing settings")
+                            hotspotEnabledAt = System.currentTimeMillis() // Mark that hotspot is enabled
+                            closeWindow()
                             return
                         }
                     }
@@ -81,6 +97,7 @@ class HotspotAccessibilityService : AccessibilityService() {
                     if (!isProcessing) {
                         isProcessing = true
                         lastToggleClickTime = System.currentTimeMillis()
+                        hotspotEnabledAt = 0L // Reset flag when attempting to enable
                         enableHotspotViaAccessibility()
                         isProcessing = false
                         // Don't stop the periodic check - settings may open multiple times

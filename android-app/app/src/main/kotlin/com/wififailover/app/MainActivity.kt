@@ -9,10 +9,13 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.provider.Settings
+import android.view.accessibility.AccessibilityManager
 import android.widget.Button
 import android.widget.EditText
 import android.widget.TextView
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.NotificationCompat
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -85,6 +88,7 @@ class MainActivity : AppCompatActivity() {
 
         // Check and request Device Admin if needed
         checkDeviceAdmin()
+        checkAccessibilityService()
         addDebugLog("App started")
 
         // Reschedule WorkManager if monitoring was enabled
@@ -103,6 +107,33 @@ class MainActivity : AppCompatActivity() {
             addDebugLog("⚠️ Device Admin not enabled")
         } else {
             addDebugLog("✓ Device Admin enabled")
+        }
+    }
+
+    private fun isAccessibilityServiceEnabled(): Boolean {
+        val enabledServices = Settings.Secure.getString(
+            contentResolver,
+            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+        ) ?: return false
+        // Check both possible package name formats
+        return enabledServices.contains("com.wififailover.app/") &&
+               enabledServices.contains("HotspotAccessibilityService")
+    }
+
+    private fun checkAccessibilityService() {
+        if (!isAccessibilityServiceEnabled()) {
+            addDebugLog("⚠️ Accessibility Service not enabled - prompting...")
+            AlertDialog.Builder(this)
+                .setTitle("Enable Accessibility Service")
+                .setMessage("WiFi Failover needs accessibility permission to automatically enable hotspot. Please enable it in Settings.")
+                .setPositiveButton("Open Settings") { _, _ ->
+                    val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                    startActivity(intent)
+                }
+                .setNegativeButton("Cancel", null)
+                .show()
+        } else {
+            addDebugLog("✓ Accessibility Service enabled")
         }
     }
 
@@ -222,15 +253,13 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun scheduleWorkManager() {
-        // Schedule background polling via WorkManager (runs every 5 seconds)
-        val workRequest = PeriodicWorkRequestBuilder<WiFiFailoverWorker>(
-            5,
-            TimeUnit.SECONDS
-        ).build()
+        // Schedule background polling via WorkManager using OneTimeWorkRequest
+        // (PeriodicWorkRequest has 15-minute minimum, so we use OneTime + self-reschedule)
+        val workRequest = androidx.work.OneTimeWorkRequestBuilder<WiFiFailoverWorker>().build()
 
-        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+        WorkManager.getInstance(this).enqueueUniqueWork(
             "wifi_failover_polling",
-            ExistingPeriodicWorkPolicy.KEEP,
+            androidx.work.ExistingWorkPolicy.KEEP,
             workRequest
         )
     }
