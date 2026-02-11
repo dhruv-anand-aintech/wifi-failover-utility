@@ -8,9 +8,9 @@ echo "WiFi Failover - Offline Detection Test"
 echo "==============================================="
 echo ""
 
-# Kill any manual instances
-echo "1. Cleaning up any manual daemon instances..."
-pkill -9 -f "wifi-failover-monitor" 2>/dev/null || true
+# Kill only wifi-failover-monitor instances (not all python)
+echo "1. Cleaning up wifi-failover-monitor instances..."
+ps aux | grep "wifi-failover-monitor" | grep -v grep | awk '{print $2}' | xargs -r kill -9 2>/dev/null || true
 sleep 2
 
 # Start via launchctl (ensures single instance)

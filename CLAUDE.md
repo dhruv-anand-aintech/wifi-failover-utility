@@ -191,8 +191,8 @@ Uses private Apple framework - not guaranteed stable across OS versions.
 The pause-heartbeat/resume-heartbeat commands only work reliably with ONE daemon instance. Always use:
 
 ```bash
-# Kill any manual daemon instances
-pkill -9 -f "wifi-failover-monitor"
+# Kill ONLY wifi-failover-monitor instances (not all python!)
+ps aux | grep "wifi-failover-monitor" | grep -v grep | awk '{print $2}' | xargs -r kill -9
 
 # Start daemon via launchctl (ensures single instance)
 launchctl load ~/Library/LaunchAgents/com.wifi-failover.monitor.plist
