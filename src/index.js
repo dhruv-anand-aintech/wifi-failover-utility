@@ -1,4 +1,3 @@
-const FAILOVER_SECRET = "FAILOVER_SECRET_PLACEHOLDER";
 const STATE_TTL = 600;  // 10 minutes
 
 export default {
@@ -57,7 +56,7 @@ async function handleCommand(request, env, action) {
     const body = await request.json();
 
     // Validate secret
-    if (body.secret !== FAILOVER_SECRET) {
+    if (body.secret !== env.FAILOVER_SECRET) {
       return new Response(
         JSON.stringify({ error: "Invalid secret" }),
         { status: 403, headers: { "Content-Type": "application/json" } }
@@ -203,7 +202,7 @@ async function handleAcknowledge(request, env) {
     }
 
     // Validate secret
-    if (body.secret !== FAILOVER_SECRET) {
+    if (body.secret !== env.FAILOVER_SECRET) {
       return new Response(
         JSON.stringify({ error: "Invalid secret" }),
         { status: 403, headers: { "Content-Type": "application/json" } }
