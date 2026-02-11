@@ -3,7 +3,6 @@
 import argparse
 import subprocess
 import psutil
-import time
 import os
 from pathlib import Path
 from .config import Config
@@ -192,23 +191,23 @@ def setup_interactive():
     config.set_worker_secret(worker_secret)
     print(f"✓ Configuration saved to: {config.config_file}")
 
-    # Ask user if they want to start daemon now
-    print_section("Start Daemon")
-    response = input("Start the WiFi failover daemon now? (y/n): ").strip().lower()
+    # Set up auto-start on login
+    print_section("Auto-Start on Login")
+    response = input("Enable auto-start when you login? (y/n): ").strip().lower()
 
     if response == 'y':
-        print("\nInstalling auto-start on login...")
         setup_launchd_autostart()
-        print("\nStarting daemon in background...")
-        start_daemon_background()
-        return True
+        print("\nStarting daemon now...")
+        start_daemon_launchd()
     else:
         print_section("Setup Complete! ✓")
         print("\nTo start the daemon later, run:")
         print("  wifi-failover daemon")
         print("\nTo enable auto-start on login, run:")
         print("  wifi-failover enable-autostart")
-        return True
+
+    print_section("Setup Complete! ✓")
+    return True
 
 
 def kill_existing_daemons():
@@ -301,14 +300,39 @@ def disable_launchd_autostart():
         return False
 
 
-def start_daemon_background():
-    """Start WiFi failover monitor as a background daemon"""
-    print_section("Starting WiFi Failover Daemon")
+def start_daemon_launchd():
+    """Start the daemon using launchctl (requires auto-start to be set up)"""
+    plist_dest = Path.home() / "Library" / "LaunchAgents" / "com.wifi-failover.monitor.plist"
 
-    # Kill any existing daemons
-    killed = kill_existing_daemons()
-    if killed > 0:
-        print(f"✓ Stopped {killed} existing daemon(s)")
+    if not plist_dest.exists():
+        print(f"❌ Auto-start not configured. Run 'wifi-failover enable-autostart' first.")
+        return False
+
+    try:
+        result = subprocess.run(
+            ["launchctl", "start", "com.wifi-failover.monitor"],
+            capture_output=True,
+            text=True
+        )
+
+        if result.returncode == 0:
+            print(f"✅ Daemon started successfully!")
+            print(f"   Log file: ~/.wifi-failover-logs/monitor.log")
+            print()
+            print("Run 'wifi-failover status' to check daemon status")
+            return True
+        else:
+            print(f"❌ Error starting daemon: {result.stderr}")
+            return False
+
+    except Exception as e:
+        print(f"❌ Error starting daemon: {e}")
+        return False
+
+
+def start_daemon_background():
+    """Start WiFi failover monitor as a background daemon (foreground mode for testing)"""
+    print_section("Starting WiFi Failover Daemon (Foreground)")
 
     config = Config()
 
@@ -325,47 +349,21 @@ def start_daemon_background():
     print(f"  Hotspot: {hotspot}")
     print()
 
-    # Start daemon in background using subprocess
+    # Start the monitor (this blocks until interrupted)
+    monitor = WiFiFailoverMonitor(
+        monitored_networks=[],
+        hotspot_ssid=hotspot,
+        worker_url=worker_url,
+        worker_secret=worker_secret
+    )
+
     try:
-        # Use nohup to ensure process survives terminal close
-        log_file = Path.home() / ".wifi-failover-logs" / "daemon.log"
-        log_file.parent.mkdir(exist_ok=True, parents=True)
+        monitor.monitor_network()
+    except KeyboardInterrupt:
+        print("\n⏹️  Daemon stopped by user")
+        return True
 
-        with open(log_file, 'a') as f:
-            f.write(f"\n{'='*80}\n")
-            f.write(f"Daemon started at {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
-            f.write(f"{'='*80}\n")
-
-        # Start the monitor in a subprocess
-        monitor = WiFiFailoverMonitor(
-            monitored_networks=[],
-            hotspot_ssid=hotspot,
-            worker_url=worker_url,
-            worker_secret=worker_secret
-        )
-
-        # Run in background
-        import threading
-        thread = threading.Thread(target=monitor.monitor_network, daemon=False)
-        thread.start()
-
-        print(f"✅ Daemon started successfully!")
-        print(f"   Log file: {log_file}")
-        print(f"   PID: {os.getpid()}")
-        print()
-        print("Run 'wifi-failover status' to check daemon status")
-
-        # Keep the daemon running
-        try:
-            while True:
-                time.sleep(1)
-        except KeyboardInterrupt:
-            print("\n⏹️  Daemon stopped by user")
-            return True
-
-    except Exception as e:
-        print(f"❌ Error starting daemon: {e}")
-        return False
+    return True
 
 
 def start_monitor():
@@ -464,17 +462,7 @@ def main():
         print("\n⚠️  Configuration not found.\n")
         response = input("Run setup wizard now? (y/n): ").strip().lower()
         if response == 'y':
-            if setup_interactive():
-                print("\n✅ Configuration saved. Starting daemon...\n")
-                # Now run the original command with config
-                if args.command == "daemon":
-                    start_daemon_background()
-                elif args.command == "start":
-                    start_monitor()
-                elif args.command == "status":
-                    show_status()
-            else:
-                print("\nSetup cancelled. Run 'wifi-failover setup' to configure later.\n")
+            setup_interactive()
             return
         else:
             print("\nRun 'wifi-failover setup' when ready to configure.\n")
@@ -483,7 +471,7 @@ def main():
     if args.command == "setup":
         setup_interactive()
     elif args.command == "daemon":
-        start_daemon_background()
+        start_daemon_launchd()
     elif args.command == "enable-autostart":
         setup_launchd_autostart()
     elif args.command == "disable-autostart":
