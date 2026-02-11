@@ -7,7 +7,9 @@ This guide walks you through the complete setup process, from scratch to fully o
 You'll need to:
 1. **Deploy a Cloudflare Worker** - Acts as the relay between Mac and Android
 2. **Install the utility on Mac** - Run the interactive setup
-3. **Configure Tasker on Android** - Set up the phone to listen for commands
+3. **Configure Android Automation** - Set up the phone to listen for commands
+   - **Automate** (recommended - easier, visual)
+   - **Tasker** (alternative - more powerful)
 4. **Test the system** - Verify everything works together
 
 Total time: **30-45 minutes**
@@ -208,15 +210,61 @@ tail -f /tmp/wifi-failover/monitor.log
 
 ---
 
-## Part 3: Configure Android Tasker
+## Part 3: Configure Android Automation
 
-### Step 3.1: Install Tasker
+Choose one of the following based on your preference:
 
-1. Open Google Play Store on your Android phone
+### Option A: Automate (Recommended - Easier)
+
+**Why Automate?**
+- Visual block-based programming
+- Easier learning curve
+- Perfect for this use case
+- Free version has all needed features
+
+#### Step 3A.1: Install Automate
+
+1. Open Google Play Store on Android phone
+2. Search for "Automate" (by LlamaLab)
+3. Install the app (free version)
+
+#### Step 3A.2: Get Setup Instructions
+
+The setup file was created on your Mac:
+```
+~/Desktop/AUTOMATE_SETUP.txt
+```
+
+Transfer it to your phone and follow the **5 steps** to:
+1. Create a visual flow with HTTP GET, JSON parsing, and Hotspot blocks
+2. Add an IF/ELSE conditional
+3. Set up automatic 2-minute polling
+4. Test the flow
+
+#### Step 3A.3: Test Automate
+
+1. In Automate, verify the flow toggle is ON (blue)
+2. Tap the flow to open it
+3. Tap ▶ Play button to manually test
+4. Check that hotspot turns on/off correctly
+
+---
+
+### Option B: Tasker (More Powerful)
+
+**Why Tasker?**
+- More advanced automation capabilities
+- Larger community support
+- More trigger options available
+- Better for complex workflows
+
+#### Step 3B.1: Install Tasker
+
+1. Open Google Play Store on Android phone
 2. Search for "Tasker"
 3. Install it (~$3)
 
-### Step 3.2: Enable Device Admin
+#### Step 3B.2: Enable Device Admin
 
 1. Open Tasker app
 2. Tap ≡ Menu → Preferences
@@ -224,36 +272,23 @@ tail -f /tmp/wifi-failover/monitor.log
 4. Toggle "Device Admin" ON
 5. Tap "Activate" when prompted
 
-### Step 3.3: Get Setup Instructions
+#### Step 3B.3: Get Setup Instructions
 
-On your Mac, run:
-
-```bash
-wifi-failover tasker-guide
-```
-
-This generates a text file with step-by-step Tasker instructions.
-
-**Alternative:** This file was already created during Mac setup at:
+The setup file was created on your Mac:
 ```
 ~/Desktop/TASKER_SETUP.txt
 ```
 
-### Step 3.4: Follow Tasker Instructions
+Transfer it to your phone and follow the **7 steps** to:
+1. Create a task named "WiFi Failover Monitor"
+2. Add HTTP GET action to check status
+3. Add JSON parsing
+4. Add IF conditional
+5. Add Hotspot turn-on action
+6. Add HTTP POST acknowledgment
+7. Create a time-based Profile that runs every 2 minutes
 
-1. Transfer `TASKER_SETUP.txt` to your phone
-2. Open the file on your phone
-3. Follow each step carefully:
-   - Create a new task named "WiFi Failover Monitor"
-   - Add HTTP GET action to check status
-   - Add JavaScript to parse response
-   - Add IF conditional
-   - Add Hotspot turn-on action
-   - Add HTTP POST acknowledgment
-   - Add END IF
-4. Create a Profile that runs the task every 2 minutes
-
-### Step 3.5: Test Tasker
+#### Step 3B.4: Test Tasker
 
 1. In Tasker, go to **Tasks** tab
 2. Find "WiFi Failover Monitor"
@@ -364,7 +399,32 @@ security find-generic-password -wa "Dhruv's iPhone"
 networksetup -setairportnetwork en0 "Dhruv's iPhone" "password"
 ```
 
-### Android/Tasker Issues
+### Android Automation Issues
+
+**Automate Issues:**
+
+**"Flow doesn't run"**
+- Check toggle is ON (blue) next to flow name
+- Verify Automate has background execution enabled
+- Check battery optimization isn't blocking Automate
+- Tap ▶ Play to manually test the flow
+- Check flow history (History tab) for execution logs
+
+**"Hotspot doesn't enable"**
+- Test manual hotspot toggle on phone first
+- Verify HTTP blocks show correct responses
+- Tap individual block names to see debug output
+- Check internet connectivity during flow run
+
+**"HTTP request fails"**
+- Check phone has internet connection
+- Verify Worker URL is exactly correct
+- Test URL in phone browser
+- Check flow history for error messages
+
+---
+
+**Tasker Issues:**
 
 **"Task doesn't run"**
 - Verify Device Admin is enabled

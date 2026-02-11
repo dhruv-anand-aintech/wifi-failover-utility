@@ -2,12 +2,14 @@
 
 ## Quick Summary
 
-This utility automatically switches your Mac from a failing WiFi network to your Android phone's hotspot, using a Cloudflare Worker as a relay and Tasker to control the phone.
+This utility automatically switches your Mac from a failing WiFi network to your Android phone's hotspot, using a Cloudflare Worker as a relay and Automate (or Tasker) to control the phone.
 
 ## What You Need
 
 - **macOS** (Big Sur or later)
-- **Android phone** with Tasker app (~$3 from Google Play Store)
+- **Android phone** with either:
+  - **Automate** (Google Play Store - free, recommended)
+  - **Tasker** (Google Play Store - ~$3, more powerful)
 - **Cloudflare account** (free tier works)
 - **Internet connection** to deploy the Worker
 - **15-20 minutes** to set everything up
@@ -176,47 +178,54 @@ Shows your current setup and recent logs.
 
 ---
 
-## Step 3: Configure Android Tasker (10 min)
+## Step 3: Configure Android (10 min)
 
-### Install Tasker
+### Choose Your Automation App
 
-1. Open **Google Play Store** on your Android phone
-2. Search for **"Tasker"**
+**Recommended: Automate** (easier, visual blocks)
+- Free, simpler to set up
+- Use this if you want a straightforward visual approach
+- Instructions: `~/Desktop/AUTOMATE_SETUP.txt`
+
+**Alternative: Tasker** (more powerful)
+- ~$3 paid app with advanced features
+- Use this if you need complex automation
+- Instructions: `~/Desktop/TASKER_SETUP.txt`
+
+### Install Your Chosen App
+
+**For Automate:**
+1. Open Google Play Store on Android phone
+2. Search for "Automate"
+3. Install the app by LlamaLab
+
+**For Tasker:**
+1. Open Google Play Store on Android phone
+2. Search for "Tasker"
 3. Install it
-
-### Enable Device Admin
-
-1. Open **Tasker** app
-2. Tap **≡ Menu** → **Preferences**
-3. Scroll to **Misc**
-4. Toggle **Device Admin** ON
-5. Tap **Activate** when prompted
 
 ### Get Setup Instructions
 
-On your Mac:
-```bash
-wifi-failover tasker-guide
-```
+Both setup files are automatically created on your Mac:
 
-Or find the file at:
-```
-~/Desktop/TASKER_SETUP.txt
+```bash
+# Check what files were created
+ls ~/Desktop/*_SETUP.txt
 ```
 
 ### Follow the Instructions
 
-Transfer the file to your phone and follow the **7 steps** to create:
-- 1 Task (WiFi Failover Monitor)
-- 1 Profile (Time-based, every 2 minutes)
+Transfer the appropriate file to your phone:
 
-**The task should:**
-1. GET `/api/status` from your Worker
-2. Parse the JSON response
-3. IF `hotspot_enabled` is true:
-   - Turn ON hotspot
-   - POST acknowledgment
-4. END IF
+**For Automate:**
+- Follow the 5 steps to create a visual flow
+- Set up automatic 2-minute polling
+- No complex scripting needed
+
+**For Tasker:**
+- Follow the 7 steps to create a task and profile
+- Configure Device Admin access
+- Set up time-based profile
 
 ---
 
@@ -317,7 +326,8 @@ tail -f /tmp/wifi-failover/monitor.log
 | Problem | Check |
 |---------|-------|
 | WiFi not detected | `airport -I` |
-| Can't connect to hotspot | Verify password in Keychain: `security find-generic-password -wa "Dhruv's iPhone"` |
+| Can't connect to hotspot | Verify password in Keychain: `security find-generic-password -wa "Dhruv's Phone"` |
+| Automate not running | Check app is in background, toggle is enabled |
 | Tasker not running | Enable Device Admin, check Profile is active |
 | Worker not responding | `curl https://your-worker/health` |
 | Daemon won't start | Check logs: `tail -f /tmp/wifi-failover/stderr.log` |
