@@ -11,7 +11,7 @@
 	<key>ProgramArguments</key>
 	<array>
 		<string>/usr/local/bin/wifi-failover</string>
-		<string>start</string>
+		<string>daemon</string>
 	</array>
 
 	<key>RunAtLoad</key>
@@ -21,10 +21,10 @@
 	<true/>
 
 	<key>StandardOutPath</key>
-	<string>/tmp/wifi-failover/stdout.log</string>
+	<string>~/.wifi-failover-logs/launchd-stdout.log</string>
 
 	<key>StandardErrorPath</key>
-	<string>/tmp/wifi-failover/stderr.log</string>
+	<string>~/.wifi-failover-logs/launchd-stderr.log</string>
 
 	<key>ProcessType</key>
 	<string>Background</string>
