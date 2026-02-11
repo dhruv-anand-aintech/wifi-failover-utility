@@ -16,19 +16,19 @@ class BootCompleteReceiver : BroadcastReceiver() {
             val preferences = Preferences(context)
 
             if (preferences.monitoringEnabled && preferences.isConfigured()) {
-                scheduleWork(context, preferences.pollingInterval.toLong())
+                schedulePollingWork(context)
             }
         }
     }
 
-    private fun scheduleWork(context: Context, pollingInterval: Long) {
+    private fun schedulePollingWork(context: Context) {
         val workRequest = PeriodicWorkRequestBuilder<WiFiFailoverWorker>(
-            pollingInterval,
-            TimeUnit.MINUTES
+            10,
+            TimeUnit.SECONDS
         ).build()
 
         WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-            "wifi_failover_work",
+            "wifi_failover_polling",
             ExistingPeriodicWorkPolicy.KEEP,
             workRequest
         )

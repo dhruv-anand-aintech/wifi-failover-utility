@@ -2,17 +2,23 @@ package com.wififailover.app.worker
 
 import android.app.NotificationManager
 import android.content.Context
+import android.content.SharedPreferences
 import androidx.core.app.NotificationCompat
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import com.wififailover.app.R
 import com.wififailover.app.api.WorkerApi
-import com.wififailover.app.api.AcknowledgeRequest
 import com.wififailover.app.data.Preferences
-import kotlinx.coroutines.delay
+import com.wififailover.app.service.HotspotService
 
 class WiFiFailoverWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     private val preferences = Preferences(context)
+    private val hotspotService = HotspotService(context)
+    private val sharedPrefs: SharedPreferences = context.getSharedPreferences("wifi_failover_worker", Context.MODE_PRIVATE)
+
+    companion object {
+        private const val OFFLINE_COUNT_KEY = "daemon_offline_count"
+        private const val OFFLINE_THRESHOLD = 2
+    }
 
     override suspend fun doWork(): Result {
         return try {
@@ -25,15 +31,26 @@ class WiFiFailoverWorker(context: Context, params: WorkerParameters) : Coroutine
 
             val api = WorkerApi.create(url)
 
-            // Check status from Worker
+            // Check daemon status from Worker
             val status = api.getStatus(secret)
 
-            if (status.enabled) {
-                // Hotspot is requested, send acknowledgment
-                api.acknowledge(AcknowledgeRequest(secret))
+            if (status.daemon_online) {
+                // Daemon is online, reset counter
+                sharedPrefs.edit().putInt(OFFLINE_COUNT_KEY, 0).apply()
+            } else {
+                // Daemon is offline, increment counter
+                val offlineCount = sharedPrefs.getInt(OFFLINE_COUNT_KEY, 0) + 1
+                sharedPrefs.edit().putInt(OFFLINE_COUNT_KEY, offlineCount).apply()
 
-                // Show notification
-                showNotification("WiFi Failover Active", "Hotspot enabled on your phone")
+                if (offlineCount >= OFFLINE_THRESHOLD) {
+                    // Enable hotspot when daemon is offline
+                    val hotspotEnabled = hotspotService.enableHotspot()
+                    if (hotspotEnabled) {
+                        showNotification("WiFi Failover", "Daemon offline - hotspot enabled")
+                    } else {
+                        showNotification("WiFi Failover", "Daemon offline - enable hotspot manually")
+                    }
+                }
             }
 
             Result.success()
