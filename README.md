@@ -22,8 +22,9 @@ Automatic failover from WiFi to Android hotspot. When your primary WiFi network 
 ## Requirements
 
 - **macOS** (tested on Big Sur+)
-- **Android phone** with either:
-  - **Automate** (free, recommended - easier)
+- **Android phone** (Android 11+) with one of:
+  - **WiFi Failover App** (native, recommended - see `android-app/`)
+  - **Automate** (free, visual blocks)
   - **Tasker** (~$3, more powerful)
 - **Cloudflare account** (free tier is sufficient)
 - **Python 3.8+**
@@ -62,22 +63,34 @@ The Worker URL and secret will be used in the setup wizard.
 
 ### 4. Configure Android (Choose One)
 
-**Automate (Recommended - Easier):**
+**Option A: Native WiFi Failover App (Recommended):**
 ```bash
-# Setup files automatically generated:
+# Build and install the native app
+cd android-app
+./gradlew installDebug
+```
+- Open app on phone
+- Enter: Worker URL, Secret, Hotspot SSID
+- Tap "Start Monitoring"
+- App automatically starts on boot
+
+See [android-app/README.md](android-app/README.md) for detailed instructions.
+
+**Option B: Automate (Visual Blocks):**
+```bash
 open ~/Desktop/AUTOMATE_SETUP.txt
 ```
-- Install Automate from Google Play Store
-- Follow the visual block-based setup (5 steps)
+- Install from Google Play Store
+- Follow the 5-step visual setup
 - No complex scripting needed
 
-**Tasker (More Powerful):**
+**Option C: Tasker (Advanced):**
 ```bash
 open ~/Desktop/TASKER_SETUP.txt
 ```
-- Install Tasker from Google Play Store (~$3)
+- Install from Google Play Store (~$3)
 - Enable Device Admin
-- Follow the task and profile setup (7 steps)
+- Follow the 7-step task setup
 
 ### 5. Start monitoring
 
@@ -159,7 +172,15 @@ wifi-failover tasker-guide
 - **GET** `/api/status` - Check command status
 - **POST** `/api/acknowledge` - Confirm action completed
 
-### Android Automation (Automate or Tasker)
+### Android (WiFi Failover App, Automate, or Tasker)
+
+**WiFi Failover App (Native - Recommended):**
+- Runs as background WorkManager task every 1-2 minutes
+- GETs `/api/status` to check if hotspot should be enabled
+- Parses JSON response in Kotlin
+- If `hotspot_enabled = true`: enables hotspot via WifiManager
+- POSTs `/api/acknowledge` to confirm
+- Auto-starts on device boot
 
 **Automate (Visual blocks):**
 - Runs flow every 1-2 minutes (configurable)
@@ -191,6 +212,13 @@ tail -f /tmp/wifi-failover/monitor.log
 ```
 
 ### Hotspot not triggering
+
+**If using WiFi Failover App:**
+- Verify "Start Monitoring" button shows "Stop Monitoring" (toggle is ON)
+- Check battery optimization: Settings → Battery → App not restricted
+- Check permissions: Settings → Apps → WiFi Failover → Permissions
+- Check logs: `adb logcat | grep WiFiFailover`
+- On Android 12+, some versions limit hotspot control (see limitations)
 
 **If using Automate:**
 - Verify flow toggle is enabled (blue) in flows list
