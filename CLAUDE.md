@@ -184,6 +184,35 @@ Uses private Apple framework - not guaranteed stable across OS versions.
 }
 ```
 
+## Testing Offline Detection
+
+### Important: Use launchctl for single instance
+
+The pause-heartbeat/resume-heartbeat commands only work reliably with ONE daemon instance. Always use:
+
+```bash
+# Kill any manual daemon instances
+pkill -9 -f "wifi-failover-monitor"
+
+# Start daemon via launchctl (ensures single instance)
+launchctl load ~/Library/LaunchAgents/com.wifi-failover.monitor.plist
+```
+
+### Test workflow
+
+```bash
+# 1. Pause heartbeats (simulates offline)
+wifi-failover pause-heartbeat
+
+# 2. Wait 12-20 seconds for Android app to detect offline
+# Watch: Android logcat | grep WiFiFailoverWorker
+
+# 3. Hotspot should enable automatically
+
+# 4. Resume when done
+wifi-failover resume-heartbeat
+```
+
 ## Common Commands
 
 ```bash
