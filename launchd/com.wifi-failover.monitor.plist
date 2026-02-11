@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.wifi-failover.monitor</string>
+
+	<key>Program</key>
+	<string>/usr/local/bin/wifi-failover</string>
+
+	<key>ProgramArguments</key>
+	<array>
+		<string>/usr/local/bin/wifi-failover</string>
+		<string>start</string>
+	</array>
+
+	<key>RunAtLoad</key>
+	<true/>
+
+	<key>KeepAlive</key>
+	<true/>
+
+	<key>StandardOutPath</key>
+	<string>/tmp/wifi-failover/stdout.log</string>
+
+	<key>StandardErrorPath</key>
+	<string>/tmp/wifi-failover/stderr.log</string>
+
+	<key>ProcessType</key>
+	<string>Background</string>
+
+	<key>Nice</key>
+	<integer>10</integer>
+
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>PATH</key>
+		<string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+	</dict>
+
+	<!-- Auto-restart if it crashes -->
+	<key>Restart</key>
+	<string>OnFailure</string>
+
+	<!-- Wait 10 seconds before restarting -->
+	<key>StartInterval</key>
+	<integer>10</integer>
+</dict>
+</plist>
