@@ -104,7 +104,7 @@ async function handleHeartbeat(request, env) {
     }
 
     // Validate secret
-    if (!body.secret || body.secret !== FAILOVER_SECRET) {
+    if (!body.secret || body.secret !== env.FAILOVER_SECRET) {
       return new Response(
         JSON.stringify({ error: "Invalid secret" }),
         { status: 403, headers: { "Content-Type": "application/json" } }
