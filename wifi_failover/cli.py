@@ -6,7 +6,7 @@ import psutil
 import time
 import os
 from pathlib import Path
-from .config import Config, get_available_networks, get_current_network
+from .config import Config
 from .monitor import WiFiFailoverMonitor
 
 
@@ -27,43 +27,9 @@ def print_section(title: str):
     print(f"{'━' * 80}\n")
 
 
-def get_network_selection() -> list:
-    """Interactive network selection"""
-    print_section("Step 1: Select Networks to Monitor")
-
-    available = get_available_networks()
-    current = get_current_network()
-
-    if not available:
-        print("⚠️  Could not detect any networks. Please enter manually.\n")
-        user_input = input("Enter network names to monitor (comma-separated): ")
-        return [n.strip() for n in user_input.split(',') if n.strip()]
-
-    print(f"Available networks on this Mac:")
-    for i, network in enumerate(available, 1):
-        marker = " ← Currently connected" if network == current else ""
-        print(f"  {i}. {network}{marker}")
-
-    print("\nEnter network numbers to monitor (e.g., '1,2' or '1'):")
-    user_input = input("> ").strip()
-
-    selected = []
-    try:
-        indices = [int(x.strip()) - 1 for x in user_input.split(',')]
-        for idx in indices:
-            if 0 <= idx < len(available):
-                selected.append(available[idx])
-    except ValueError:
-        print("Invalid input. Using all available networks.")
-        selected = available
-
-    print(f"\n✓ Selected networks: {selected}")
-    return selected
-
-
 def get_hotspot_ssid() -> str:
     """Get phone's hotspot SSID"""
-    print_section("Step 2: Phone Hotspot Name")
+    print_section("Step 1: Phone Hotspot Name")
     print("Enter your phone's hotspot SSID (the name that appears in WiFi networks):")
     print("(Example: 'Dhruv's iPhone')\n")
 
@@ -78,7 +44,7 @@ def get_hotspot_ssid() -> str:
 
 def get_cloudflare_credentials() -> tuple:
     """Get Cloudflare Worker credentials"""
-    print_section("Step 3: Cloudflare Worker Credentials")
+    print_section("Step 2: Cloudflare Worker Credentials")
     print("Enter your Cloudflare Worker URL and secret.")
     print("If you don't have one deployed yet, see: https://github.com/yourusername/wifi-failover-utility/blob/main/CLOUDFLARE_SETUP.md\n")
 
@@ -99,7 +65,7 @@ def get_cloudflare_credentials() -> tuple:
 
 def save_hotspot_password(hotspot_ssid: str):
     """Save hotspot password to Keychain"""
-    print_section("Step 4: Hotspot Password")
+    print_section("Step 3: Hotspot Password")
     print("The daemon needs your hotspot password to auto-connect on failover.")
     print("This will be stored securely in your Mac's Keychain.\n")
 
@@ -143,25 +109,18 @@ def setup_interactive():
     """Run interactive setup wizard"""
     print_banner()
 
-    # Step 1: Select networks
-    networks = get_network_selection()
-    if not networks:
-        print("❌ No networks selected. Exiting.")
-        return False
-
-    # Step 2: Hotspot SSID
+    # Step 1: Hotspot SSID
     hotspot_ssid = get_hotspot_ssid()
 
-    # Step 3: Cloudflare credentials
+    # Step 2: Cloudflare credentials
     worker_url, worker_secret = get_cloudflare_credentials()
 
-    # Step 4: Save hotspot password
+    # Step 3: Save hotspot password
     save_hotspot_password(hotspot_ssid)
 
     # Save configuration
     print_section("Saving Configuration")
     config = Config()
-    config.set_monitored_networks(networks)
     config.set_hotspot_ssid(hotspot_ssid)
     config.set_worker_url(worker_url)
     config.set_worker_secret(worker_secret)
@@ -288,17 +247,15 @@ def start_daemon_background():
     config = Config()
 
     # Validate configuration
-    networks = config.get_monitored_networks()
     hotspot = config.get_hotspot_ssid()
     worker_url = config.get_worker_url()
     worker_secret = config.get_worker_secret()
 
-    if not all([networks, hotspot, worker_url, worker_secret]):
+    if not all([hotspot, worker_url, worker_secret]):
         print("❌ Configuration incomplete. Run 'wifi-failover setup' first.")
         return False
 
     print(f"✓ Configuration valid")
-    print(f"  Networks: {networks}")
     print(f"  Hotspot: {hotspot}")
     print()
 
@@ -315,7 +272,7 @@ def start_daemon_background():
 
         # Start the monitor in a subprocess
         monitor = WiFiFailoverMonitor(
-            monitored_networks=networks,
+            monitored_networks=[],
             hotspot_ssid=hotspot,
             worker_url=worker_url,
             worker_secret=worker_secret
@@ -352,23 +309,21 @@ def start_monitor():
     config = Config()
 
     # Validate configuration
-    networks = config.get_monitored_networks()
     hotspot = config.get_hotspot_ssid()
     worker_url = config.get_worker_url()
     worker_secret = config.get_worker_secret()
 
-    if not all([networks, hotspot, worker_url, worker_secret]):
+    if not all([hotspot, worker_url, worker_secret]):
         print("❌ Configuration incomplete. Run 'wifi-failover setup' first.")
         return False
 
-    print(f"Networks to monitor: {networks}")
     print(f"Hotspot: {hotspot}")
     print(f"Worker: {worker_url}")
     print()
 
     # Start monitor
     monitor = WiFiFailoverMonitor(
-        monitored_networks=networks,
+        monitored_networks=[],
         hotspot_ssid=hotspot,
         worker_url=worker_url,
         worker_secret=worker_secret
@@ -384,13 +339,8 @@ def show_status():
     config = Config()
 
     print("Configuration:")
-    print(f"  Networks: {config.get_monitored_networks()}")
     print(f"  Hotspot: {config.get_hotspot_ssid()}")
     print(f"  Worker: {config.get_worker_url()}")
-
-    print("\nCurrent state:")
-    current_network = get_current_network()
-    print(f"  Connected to: {current_network}")
 
     print("\nLogs:")
     log_file = Path("/tmp/wifi-failover/monitor.log")
@@ -435,7 +385,6 @@ def main():
     # Check if configuration exists
     config = Config()
     config_exists = (
-        config.get_monitored_networks() and
         config.get_hotspot_ssid() and
         config.get_worker_url() and
         config.get_worker_secret()
