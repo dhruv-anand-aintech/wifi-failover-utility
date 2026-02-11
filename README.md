@@ -38,13 +38,13 @@ Uses isolated environment with inline dependencies (PEP 723).
 
 ### Option 2: Install with pip (Most Compatible)
 ```bash
-pip install git+https://github.com/dhruv-anand-aintech/wifi-failover-utility.git
+pip install wifi-failover-utility
 wifi-failover setup
 ```
 
 ### Option 3: Install with uv
 ```bash
-uv pip install git+https://github.com/dhruv-anand-aintech/wifi-failover-utility.git
+uv pip install wifi-failover-utility
 wifi-failover setup
 ```
 

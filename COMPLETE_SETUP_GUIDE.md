@@ -98,13 +98,13 @@ This runs the setup wizard directly from GitHub:
 
 **Using pip:**
 ```bash
-pip install git+https://github.com/dhruv-anand-aintech/wifi-failover-utility.git
+pip install wifi-failover-utility
 wifi-failover setup
 ```
 
 **Using uv:**
 ```bash
-uv pip install git+https://github.com/dhruv-anand-aintech/wifi-failover-utility.git
+uv pip install wifi-failover-utility
 wifi-failover setup
 ```
 

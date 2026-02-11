@@ -341,8 +341,8 @@ def test_check_internet_connectivity():
 
 **Installation:**
 ```bash
-pip install git+https://github.com/dhruv-anand-aintech/wifi-failover-utility.git
-uv pip install git+https://github.com/dhruv-anand-aintech/wifi-failover-utility.git
+pip install wifi-failover-utility
+uv pip install wifi-failover-utility
 ```
 
 ## Documentation

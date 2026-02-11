@@ -26,19 +26,19 @@ def main():
 
     print("Installing WiFi Failover utility from GitHub...\n")
 
-    # Install the package from git
+    # Install the package from PyPI
     try:
         subprocess.run(
             [
                 sys.executable, "-m", "pip", "install", "-q",
-                "git+https://github.com/dhruv-anand-aintech/wifi-failover-utility.git"
+                "wifi-failover-utility"
             ],
             check=True
         )
     except subprocess.CalledProcessError as e:
         print(f"❌ Error installing package: {e}")
         print("\nTry installing manually:")
-        print("  pip install git+https://github.com/dhruv-anand-aintech/wifi-failover-utility.git")
+        print("  pip install wifi-failover-utility")
         sys.exit(1)
 
     print("✅ Installation successful!\n")
