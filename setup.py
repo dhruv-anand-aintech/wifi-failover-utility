@@ -6,7 +6,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="wifi-failover-utility",
-    version="0.4.5",
+    version="0.4.6",
     author="Dhruv Anand",
     description="Automatic WiFi failover to Android hotspot with native app and lock/sleep detection",
     long_description=long_description,
@@ -14,9 +14,8 @@ setup(
     url="https://github.com/dhruv-anand-aintech/wifi-failover-utility",
     packages=find_packages(),
     package_data={
-        "": ["launchd/*.plist"],
+        "wifi_failover": ["*.plist"],
     },
-    include_package_data=True,
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",

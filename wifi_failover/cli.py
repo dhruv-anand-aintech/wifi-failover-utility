@@ -233,7 +233,8 @@ def setup_launchd_autostart():
     """Install and enable launchd auto-start on login"""
     print_section("Setting Up Auto-Start on Login")
 
-    plist_source = Path(__file__).parent.parent / "launchd" / "com.wifi-failover.monitor.plist"
+    # Plist file is in the same directory as this module
+    plist_source = Path(__file__).parent / "com.wifi-failover.monitor.plist"
     plist_dest = Path.home() / "Library" / "LaunchAgents" / "com.wifi-failover.monitor.plist"
 
     if not plist_source.exists():
