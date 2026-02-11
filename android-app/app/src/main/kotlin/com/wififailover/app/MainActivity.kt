@@ -1,8 +1,6 @@
 package com.wififailover.app
 
 import android.app.NotificationManager
-import android.app.admin.DevicePolicyManager
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.os.Build
@@ -24,7 +22,6 @@ import androidx.work.WorkManager
 import com.wififailover.app.api.AcknowledgeRequest
 import com.wififailover.app.api.WorkerApi
 import com.wififailover.app.data.Preferences
-import com.wififailover.app.receiver.AdminReceiver
 import com.wififailover.app.service.HotspotService
 import com.wififailover.app.worker.WiFiFailoverWorker
 import java.util.concurrent.TimeUnit
@@ -44,14 +41,11 @@ class MainActivity : AppCompatActivity() {
     private lateinit var pollingIntervalInput: EditText
     private lateinit var saveButton: Button
     private lateinit var monitorButton: Button
-    private lateinit var deviceAdminButton: Button
     private lateinit var testFailoverButton: Button
     private lateinit var debugLog: TextView
 
     private val handler = Handler(Looper.getMainLooper())
     private lateinit var hotspotService: HotspotService
-    private lateinit var devicePolicyManager: DevicePolicyManager
-    private lateinit var adminComponent: ComponentName
     private val debugMessages = mutableListOf<String>()
     private var daemonOfflineCount = 0
     private val DAEMON_OFFLINE_THRESHOLD = 2 // Enable hotspot after 2 consecutive offline checks (~10 seconds)
@@ -62,8 +56,6 @@ class MainActivity : AppCompatActivity() {
 
         preferences = Preferences(this)
         hotspotService = HotspotService(this)
-        devicePolicyManager = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
-        adminComponent = ComponentName(this, AdminReceiver::class.java)
 
         // Initialize views
         statusValue = findViewById(R.id.statusValue)
@@ -73,7 +65,6 @@ class MainActivity : AppCompatActivity() {
         pollingIntervalInput = findViewById(R.id.pollingIntervalInput)
         saveButton = findViewById(R.id.saveButton)
         monitorButton = findViewById(R.id.monitorButton)
-        deviceAdminButton = findViewById(R.id.deviceAdminButton)
         testFailoverButton = findViewById(R.id.testFailoverButton)
         debugLog = findViewById(R.id.debugLog)
 
@@ -83,11 +74,9 @@ class MainActivity : AppCompatActivity() {
         // Set button listeners
         saveButton.setOnClickListener { saveConfiguration() }
         monitorButton.setOnClickListener { toggleMonitoring() }
-        deviceAdminButton.setOnClickListener { openDeviceAdminSettings() }
         testFailoverButton.setOnClickListener { testFailover() }
 
-        // Check and request Device Admin if needed
-        checkDeviceAdmin()
+        // Check and request Accessibility Service if needed
         checkAccessibilityService()
         addDebugLog("App started")
 
@@ -100,14 +89,6 @@ class MainActivity : AppCompatActivity() {
 
         // Update status display
         updateStatus()
-    }
-
-    private fun checkDeviceAdmin() {
-        if (!devicePolicyManager.isAdminActive(adminComponent)) {
-            addDebugLog("⚠️ Device Admin not enabled")
-        } else {
-            addDebugLog("✓ Device Admin enabled")
-        }
     }
 
     private fun isAccessibilityServiceEnabled(): Boolean {
@@ -135,12 +116,6 @@ class MainActivity : AppCompatActivity() {
         } else {
             addDebugLog("✓ Accessibility Service enabled")
         }
-    }
-
-    private fun openDeviceAdminSettings() {
-        val intent = Intent(android.provider.Settings.ACTION_SECURITY_SETTINGS)
-        startActivity(intent)
-        addDebugLog("Opened Device Admin settings")
     }
 
     private fun addDebugLog(message: String) {

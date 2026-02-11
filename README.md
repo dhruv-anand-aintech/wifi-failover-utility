@@ -71,7 +71,8 @@ adb install app/build/outputs/apk/release/app-release-unsigned.apk
 
 **Configure the app:**
 1. Open "WiFi Failover" app
-2. Go to Settings → Accessibility → Enable "WiFi Failover" service
+2. Enable Accessibility Service (prompt will appear on first run)
+   - Settings → Accessibility → WiFi Failover → Enable
 3. Enter your Cloudflare Worker URL
 4. Enter your Worker secret
 5. Enter your phone's hotspot SSID
@@ -204,8 +205,7 @@ tail -f /tmp/wifi-failover/monitor.log
 
 - Verify "Start Monitoring" button shows "Stop Monitoring" (toggle is ON)
 - Check battery optimization: Settings → Battery → App not restricted
-- Check permissions: Settings → Apps → WiFi Failover → Permissions
-- Check Device Admin permission is enabled
+- Check Accessibility Service is enabled: Settings → Accessibility → WiFi Failover
 - Check logs: `adb logcat | grep WiFiFailover`
 - Verify Worker URL and Secret are correct in app settings
 - Test Worker manually: `curl https://your-worker/health`
