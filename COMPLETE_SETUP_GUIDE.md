@@ -2,15 +2,18 @@
 
 This guide walks you through setting up the complete WiFi failover system from scratch.
 
-## Overview
+## Quick Start (3 steps)
 
-You'll need to:
-1. **Deploy a Cloudflare Worker** - Acts as the relay between Mac and Android
-2. **Install the utility on Mac** - Run the interactive setup
-3. **Install the Android App** - Native app automatically monitors daemon
-4. **Test the system** - Verify everything works together
+**For the impatient:**
+1. Deploy Cloudflare Worker (Part 1 below)
+2. Run one-line setup: `uv run https://raw.githubusercontent.com/dhruv-anand-aintech/wifi-failover-utility/main/wifi_failover_setup.py`
+3. Install Android app (Part 3 below)
 
 **Total time: ~20-30 minutes**
+
+---
+
+## Detailed Setup
 
 ---
 
@@ -73,44 +76,36 @@ curl https://your-worker-url/health
 
 ## Part 2: Install and Configure macOS Daemon
 
-### Step 2.1: Install the Package
+### Option A: One-Line Setup (Recommended)
 
 ```bash
-# Using pip
-pip install git+https://github.com/dhruv-anand-aintech/wifi-failover-utility.git
-
-# Or using uv
-uv pip install git+https://github.com/dhruv-anand-aintech/wifi-failover-utility.git
+uv run https://raw.githubusercontent.com/dhruv-anand-aintech/wifi-failover-utility/main/wifi_failover_setup.py
 ```
 
-### Step 2.2: Run Setup Wizard
+This runs the setup wizard directly from GitHub:
+1. Auto-detects available WiFi networks
+2. Prompts for hotspot SSID
+3. Asks for Worker URL and Secret (from Part 1)
+4. Saves hotspot password to Keychain
+5. Optionally starts daemon and enables auto-start
 
+### Option B: Install Package First
+
+**Using pip:**
 ```bash
+pip install git+https://github.com/dhruv-anand-aintech/wifi-failover-utility.git
 wifi-failover setup
 ```
 
-This interactive wizard will ask for:
-1. **Networks to monitor** - Auto-detects available WiFi networks
-2. **Phone hotspot SSID** - The name that appears in WiFi settings
-3. **Worker URL** - The URL from Part 1 (https://wifi-failover-xxxxx.workers.dev)
-4. **Worker Secret** - Use a random strong string (suggestion: run `openssl rand -base64 32`)
-5. **Hotspot password** - Stored securely in macOS Keychain
-
-At the end, the wizard will ask if you want to start the daemon now.
-
-### Step 2.3: Start the Daemon
-
-If you didn't start it in the wizard:
-
+**Using uv:**
 ```bash
-# Run in background
-wifi-failover daemon
-
-# Or enable auto-start on login
-wifi-failover enable-autostart
+uv pip install git+https://github.com/dhruv-anand-aintech/wifi-failover-utility.git
+wifi-failover setup
 ```
 
-Check the logs:
+### Verify Installation
+
+Check the daemon logs:
 ```bash
 tail -f ~/.wifi-failover-logs/monitor.log
 ```
@@ -120,6 +115,13 @@ You should see:
 Starting WiFi failover monitor
 Networks to monitor: ['Your WiFi']
 Hotspot SSID: Your Phone
+```
+
+If the daemon isn't running, start it:
+```bash
+wifi-failover daemon  # Background
+# or
+wifi-failover start   # Foreground (for testing)
 ```
 
 ---
