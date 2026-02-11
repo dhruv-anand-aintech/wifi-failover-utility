@@ -213,3 +213,17 @@ class WiFiFailoverMonitor:
             self.logger.error(f"Unexpected error: {e}", exc_info=True)
         finally:
             self.stop_heartbeat_thread()
+
+
+def run_monitor():
+    """Entry point for launchd to run the monitor directly"""
+    from .config import Config
+
+    config = Config()
+    monitor = WiFiFailoverMonitor(
+        monitored_networks=[],
+        hotspot_ssid=config.get_hotspot_ssid(),
+        worker_url=config.get_worker_url(),
+        worker_secret=config.get_worker_secret()
+    )
+    monitor.monitor_network()

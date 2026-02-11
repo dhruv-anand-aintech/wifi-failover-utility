@@ -341,14 +341,14 @@ def setup_launchd_autostart():
     plist_dest = Path.home() / "Library" / "LaunchAgents" / "com.wifi-failover.monitor.plist"
 
     try:
-        # Get the actual path to the wifi-failover binary
+        # Get the actual path to the wifi-failover-monitor binary
         result = subprocess.run(
-            ["which", "wifi-failover"],
+            ["which", "wifi-failover-monitor"],
             capture_output=True,
             text=True,
             check=True
         )
-        wifi_failover_path = result.stdout.strip()
+        monitor_path = result.stdout.strip()
 
         # Create LaunchAgents directory if needed
         plist_dest.parent.mkdir(parents=True, exist_ok=True)
@@ -365,12 +365,11 @@ def setup_launchd_autostart():
 	<string>com.wifi-failover.monitor</string>
 
 	<key>Program</key>
-	<string>{wifi_failover_path}</string>
+	<string>{monitor_path}</string>
 
 	<key>ProgramArguments</key>
 	<array>
-		<string>{wifi_failover_path}</string>
-		<string>daemon</string>
+		<string>{monitor_path}</string>
 	</array>
 
 	<key>RunAtLoad</key>
@@ -409,7 +408,7 @@ def setup_launchd_autostart():
 """
 
         plist_dest.write_text(plist_content)
-        print(f"✓ Generated plist with correct path: {wifi_failover_path}")
+        print(f"✓ Generated plist with correct path: {monitor_path}")
 
         # Load the plist with launchctl
         result = subprocess.run(

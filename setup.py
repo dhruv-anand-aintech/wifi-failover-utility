@@ -30,6 +30,7 @@ setup(
     entry_points={
         "console_scripts": [
             "wifi-failover=wifi_failover.cli:main",
+            "wifi-failover-monitor=wifi_failover.monitor:run_monitor",
         ],
     },
 )
