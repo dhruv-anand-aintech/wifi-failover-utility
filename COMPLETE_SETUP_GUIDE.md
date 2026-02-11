@@ -88,11 +88,10 @@ uv run https://raw.githubusercontent.com/dhruv-anand-aintech/wifi-failover-utili
 ```
 
 This runs the setup wizard directly from GitHub:
-1. Auto-detects available WiFi networks
-2. Prompts for hotspot SSID
-3. Asks for Worker URL and Secret (from Part 1)
-4. Saves hotspot password to Keychain
-5. Optionally starts daemon and enables auto-start
+1. Prompts for your phone's hotspot SSID
+2. Asks for Worker URL and Secret (from Part 1)
+3. Saves hotspot password to Keychain
+4. Optionally starts daemon and enables auto-start
 
 ### Option B: Install Package First
 
@@ -115,12 +114,7 @@ Check the daemon logs:
 tail -f ~/.wifi-failover-logs/monitor.log
 ```
 
-You should see:
-```
-Starting WiFi failover monitor
-Networks to monitor: ['Your WiFi']
-Hotspot SSID: Your Phone
-```
+You should see logs indicating the daemon is running and monitoring connectivity.
 
 If the daemon isn't running, start it:
 ```bash

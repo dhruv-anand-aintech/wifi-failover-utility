@@ -49,9 +49,9 @@ wifi-failover setup
 ```
 
 All methods launch an interactive setup wizard that configures:
-- Networks to monitor
 - Phone's hotspot SSID
 - Cloudflare Worker URL & Secret
+- Hotspot password (saved securely to Keychain)
 - Optional daemon auto-start
 
 ### Step 3: Deploy Cloudflare Worker (if you don't have one)
