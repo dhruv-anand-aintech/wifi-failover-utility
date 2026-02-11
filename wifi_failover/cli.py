@@ -432,6 +432,39 @@ def main():
 
     args = parser.parse_args()
 
+    # Check if configuration exists
+    config = Config()
+    config_exists = (
+        config.get_monitored_networks() and
+        config.get_hotspot_ssid() and
+        config.get_worker_url() and
+        config.get_worker_secret()
+    )
+
+    # Commands that require config
+    requires_config = args.command in ("daemon", "start", "status")
+
+    # If config missing and user tries to run daemon/start/status, prompt for setup
+    if requires_config and not config_exists:
+        print("\n⚠️  Configuration not found.\n")
+        response = input("Run setup wizard now? (y/n): ").strip().lower()
+        if response == 'y':
+            if setup_interactive():
+                print("\n✅ Configuration saved. Starting daemon...\n")
+                # Now run the original command with config
+                if args.command == "daemon":
+                    start_daemon_background()
+                elif args.command == "start":
+                    start_monitor()
+                elif args.command == "status":
+                    show_status()
+            else:
+                print("\nSetup cancelled. Run 'wifi-failover setup' to configure later.\n")
+            return
+        else:
+            print("\nRun 'wifi-failover setup' when ready to configure.\n")
+            return
+
     if args.command == "setup":
         setup_interactive()
     elif args.command == "daemon":
