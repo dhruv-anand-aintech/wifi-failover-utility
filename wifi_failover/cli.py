@@ -4,6 +4,7 @@ import argparse
 import subprocess
 import psutil
 import os
+import signal
 from time import sleep
 from pathlib import Path
 from .config import Config
@@ -620,6 +621,47 @@ def show_status():
         print("  No logs found. Monitor hasn't been started yet.")
 
 
+def pause_heartbeat():
+    """Pause daemon heartbeats to simulate offline (for testing)"""
+    try:
+        # Find the running daemon process
+        for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+            try:
+                cmdline = proc.info['cmdline']
+                if cmdline and 'wifi-failover-monitor' in ' '.join(cmdline):
+                    pid = proc.info['pid']
+                    os.kill(pid, signal.SIGUSR1)
+                    print(f"✓ Paused heartbeats for daemon (PID {pid})")
+                    print("  Simulating offline for ~12 seconds...")
+                    print("  Watch Android app logs to see offline detection")
+                    return
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+
+        print("✗ Daemon not running. Start it with: wifi-failover daemon")
+    except Exception as e:
+        print(f"✗ Error: {e}")
+
+
+def resume_heartbeat():
+    """Resume daemon heartbeats after testing"""
+    try:
+        # Find the running daemon process
+        for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+            try:
+                cmdline = proc.info['cmdline']
+                if cmdline and 'wifi-failover-monitor' in ' '.join(cmdline):
+                    pid = proc.info['pid']
+                    os.kill(pid, signal.SIGUSR2)
+                    print(f"✓ Resumed heartbeats for daemon (PID {pid})")
+                    print("  Daemon is back online")
+                    return
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+
+        print("✗ Daemon not running")
+    except Exception as e:
+        print(f"✗ Error: {e}")
 
 
 def main():
@@ -649,6 +691,10 @@ def main():
 
     # Status command
     subparsers.add_parser("status", help="Show configuration and status")
+
+    # Testing commands
+    subparsers.add_parser("pause-heartbeat", help="Pause daemon heartbeats (simulate offline, for testing)")
+    subparsers.add_parser("resume-heartbeat", help="Resume daemon heartbeats")
 
     args = parser.parse_args()
 
@@ -689,6 +735,10 @@ def main():
         start_monitor()
     elif args.command == "status":
         show_status()
+    elif args.command == "pause-heartbeat":
+        pause_heartbeat()
+    elif args.command == "resume-heartbeat":
+        resume_heartbeat()
     else:
         parser.print_help()
 

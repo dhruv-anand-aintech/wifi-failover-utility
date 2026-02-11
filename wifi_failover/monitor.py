@@ -5,6 +5,8 @@ import time
 import requests
 import logging
 import threading
+import signal
+import os
 from pathlib import Path
 from typing import List, Optional
 
@@ -34,10 +36,12 @@ class WiFiFailoverMonitor:
         # Heartbeat thread control
         self.heartbeat_thread = None
         self.heartbeat_stop = threading.Event()
+        self.heartbeat_paused = threading.Event()  # Pause heartbeats via signal
         self.heartbeat_count = 0
         self.heartbeat_failures = 0  # Track consecutive heartbeat failures
         self.last_lock_status = None  # Track lock status for change detection
         self.reported_offline = False  # Track if we've reported offline to Worker
+        self.monitor_instance = self  # For signal handlers
 
         # Setup logging
         if log_dir is None:
@@ -175,7 +179,10 @@ class WiFiFailoverMonitor:
     def _heartbeat_loop(self):
         """Background thread that sends heartbeats every 2 seconds"""
         while not self.heartbeat_stop.is_set():
-            self.send_heartbeat()
+            if not self.heartbeat_paused.is_set():
+                self.send_heartbeat()
+            else:
+                self.logger.info("⏸️  Heartbeats paused (testing mode)")
             time.sleep(2)
 
     def start_heartbeat_thread(self):
@@ -193,12 +200,33 @@ class WiFiFailoverMonitor:
             self.heartbeat_thread.join(timeout=2)
             self.logger.info("Heartbeat thread stopped")
 
+    def pause_heartbeats(self):
+        """Pause heartbeats (for testing without WiFi off)"""
+        self.heartbeat_paused.set()
+        self.heartbeat_failures = 0
+        self.logger.warning("🔴 HEARTBEATS PAUSED (testing mode) - simulating daemon offline")
+
+    def resume_heartbeats(self):
+        """Resume heartbeats"""
+        self.heartbeat_paused.clear()
+        self.logger.warning("🟢 HEARTBEATS RESUMED (testing complete)")
+
     def monitor_network(self):
         """Main monitoring loop"""
         self.logger.info(f"Starting WiFi failover monitor")
         self.logger.info(f"Networks to monitor: {self.monitored_networks}")
         self.logger.info(f"Hotspot SSID: {self.hotspot_ssid}")
         self.logger.info(f"Worker URL: {self.worker_url}")
+
+        # Setup signal handlers for testing
+        def handle_pause(signum, frame):
+            self.pause_heartbeats()
+
+        def handle_resume(signum, frame):
+            self.resume_heartbeats()
+
+        signal.signal(signal.SIGUSR1, handle_pause)
+        signal.signal(signal.SIGUSR2, handle_resume)
 
         # Start heartbeat thread
         self.start_heartbeat_thread()
