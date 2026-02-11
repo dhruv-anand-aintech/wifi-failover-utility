@@ -27,44 +27,99 @@ def print_section(title: str):
     print(f"{'━' * 80}\n")
 
 
-def get_hotspot_ssid() -> str:
+def load_env_file() -> dict:
+    """Load environment variables from ~/.env or ~/Code/.env"""
+    env_vars = {}
+
+    # Try ~/Code/.env first, then ~/.env
+    env_files = [
+        Path.home() / "Code" / ".env",
+        Path.home() / ".env"
+    ]
+
+    for env_file in env_files:
+        if env_file.exists():
+            try:
+                with open(env_file) as f:
+                    for line in f:
+                        line = line.strip()
+                        if line and not line.startswith('#') and '=' in line:
+                            key, value = line.split('=', 1)
+                            env_vars[key.strip()] = value.strip().strip('"\'')
+                return env_vars
+            except Exception as e:
+                print(f"⚠️  Warning: Could not read {env_file}: {e}")
+
+    return env_vars
+
+
+def get_hotspot_ssid(env_vars: dict = None) -> str:
     """Get phone's hotspot SSID"""
+    if env_vars is None:
+        env_vars = {}
+
     print_section("Step 1: Phone Hotspot Name")
     print("Enter your phone's hotspot SSID (the name that appears in WiFi networks):")
+    if "HOTSPOT_SSID" in env_vars:
+        print(f"(Press Enter to use: {env_vars['HOTSPOT_SSID']})")
     print("(Example: 'Dhruv's iPhone')\n")
 
     ssid = input("> ").strip()
+
+    # Use env var if empty string entered
+    if not ssid and "HOTSPOT_SSID" in env_vars:
+        ssid = env_vars["HOTSPOT_SSID"]
+        print(f"Using HOTSPOT_SSID from .env: {ssid}")
+
     if not ssid:
         print("❌ Hotspot name cannot be empty")
-        return get_hotspot_ssid()
+        return get_hotspot_ssid(env_vars)
 
     print(f"\n✓ Hotspot SSID: {ssid}")
     return ssid
 
 
-def get_cloudflare_credentials() -> tuple:
+def get_cloudflare_credentials(env_vars: dict = None) -> tuple:
     """Get Cloudflare Worker credentials"""
+    if env_vars is None:
+        env_vars = {}
+
     print_section("Step 2: Cloudflare Worker Credentials")
     print("Enter your Cloudflare Worker URL and secret.")
     print("If you don't have one deployed yet, see: https://github.com/yourusername/wifi-failover-utility/blob/main/CLOUDFLARE_SETUP.md\n")
 
     worker_url = input("Worker URL (e.g., https://wifi-failover.youraccount.workers.dev): ").strip()
+
+    # Use env var if empty string entered
+    if not worker_url and "WORKER_URL" in env_vars:
+        worker_url = env_vars["WORKER_URL"]
+        print(f"Using WORKER_URL from .env: {worker_url}")
+
     if not worker_url.startswith("https://"):
         print("❌ Worker URL must start with https://")
-        return get_cloudflare_credentials()
+        return get_cloudflare_credentials(env_vars)
 
     worker_secret = input("Worker Secret: ").strip()
+
+    # Use env var if empty string entered
+    if not worker_secret and "WORKER_SECRET" in env_vars:
+        worker_secret = env_vars["WORKER_SECRET"]
+        print(f"Using WORKER_SECRET from .env")
+
     if not worker_secret:
         print("❌ Worker secret cannot be empty")
-        return get_cloudflare_credentials()
+        return get_cloudflare_credentials(env_vars)
 
     print(f"\n✓ Worker URL: {worker_url}")
     print(f"✓ Worker Secret: {'*' * (len(worker_secret) - 4)}{worker_secret[-4:]}")
     return worker_url, worker_secret
 
 
-def save_hotspot_password(hotspot_ssid: str):
+def save_hotspot_password(hotspot_ssid: str, env_vars: dict = None):
     """Save hotspot password to Keychain"""
+    if env_vars is None:
+        env_vars = {}
+
     print_section("Step 3: Hotspot Password")
     print("The daemon needs your hotspot password to auto-connect on failover.")
     print("This will be stored securely in your Mac's Keychain.\n")
@@ -75,9 +130,15 @@ def save_hotspot_password(hotspot_ssid: str):
         return
 
     password = input(f"Enter '{hotspot_ssid}' WiFi password: ").strip()
+
+    # Use env var if empty string entered
+    if not password and "HOTSPOT_PASSWORD" in env_vars:
+        password = env_vars["HOTSPOT_PASSWORD"]
+        print(f"Using HOTSPOT_PASSWORD from .env")
+
     if not password:
         print("❌ Password cannot be empty")
-        return save_hotspot_password(hotspot_ssid)
+        return save_hotspot_password(hotspot_ssid, env_vars)
 
     # Add to Keychain
     import subprocess
@@ -109,14 +170,19 @@ def setup_interactive():
     """Run interactive setup wizard"""
     print_banner()
 
+    # Load environment variables from .env file
+    env_vars = load_env_file()
+    if env_vars:
+        print("✓ Loaded environment variables from .env\n")
+
     # Step 1: Hotspot SSID
-    hotspot_ssid = get_hotspot_ssid()
+    hotspot_ssid = get_hotspot_ssid(env_vars)
 
     # Step 2: Cloudflare credentials
-    worker_url, worker_secret = get_cloudflare_credentials()
+    worker_url, worker_secret = get_cloudflare_credentials(env_vars)
 
     # Step 3: Save hotspot password
-    save_hotspot_password(hotspot_ssid)
+    save_hotspot_password(hotspot_ssid, env_vars)
 
     # Save configuration
     print_section("Saving Configuration")
