@@ -34,6 +34,7 @@ class WiFiFailoverMonitor:
         # Heartbeat thread control
         self.heartbeat_thread = None
         self.heartbeat_stop = threading.Event()
+        self.heartbeat_count = 0
 
         # Setup logging
         if log_dir is None:
@@ -133,7 +134,10 @@ class WiFiFailoverMonitor:
                 timeout=10
             )
             if response.status_code == 200:
-                self.logger.info("♥ Heartbeat sent")
+                self.heartbeat_count += 1
+                # Log every 10th heartbeat (~50 seconds)
+                if self.heartbeat_count % 10 == 0:
+                    self.logger.info(f"♥ Heartbeats sent ({self.heartbeat_count})")
                 return True
             else:
                 self.logger.warning(f"Heartbeat failed: {response.status_code}")
@@ -212,17 +216,27 @@ class WiFiFailoverMonitor:
         recovery_count = 0
         failover_active = False
         last_status_log = time.time()
+        last_internet_state = None
 
         try:
             while True:
                 is_connected = self.check_internet_connectivity()
 
-                # Log status periodically (not every check)
-                if time.time() - last_status_log > 60:
-                    self.logger.info(
-                        f"Internet: {is_connected}, Failover: {failover_active}"
-                    )
+                # Log on state change (immediately) or periodically (every 5 minutes)
+                should_log_status = False
+                if last_internet_state is None or is_connected != last_internet_state:
+                    # Internet status changed - log immediately
+                    should_log_status = True
                     last_status_log = time.time()
+                elif time.time() - last_status_log > 300:
+                    # 5 minutes have passed - log periodic status
+                    should_log_status = True
+                    last_status_log = time.time()
+
+                if should_log_status:
+                    status_msg = "🟢 ONLINE" if is_connected else "🔴 OFFLINE"
+                    self.logger.info(f"Internet: {status_msg}, Failover: {failover_active}")
+                    last_internet_state = is_connected
 
                 # Check internet connectivity regardless of network
                 if is_connected:
