@@ -92,8 +92,8 @@ When you open the app for the first time, you'll need to enter:
 1. **Worker URL** - From your Cloudflare Worker deployment
    - Example: `https://wifi-failover.dhruv-anand.workers.dev`
 
-2. **Worker Secret** - The secret you generated during setup
-   - Example: `yZ0NDAKbwd24B9A4hjJxw2PTO+onteuBbe8RvWmqajo=`
+2. **Worker Secret** - The secret you configured in Cloudflare Workers
+   - This should be a random string you set (keep it safe!)
 
 3. **Phone Hotspot SSID** - The name of your phone's hotspot
    - Example: `Dhruv's Phone`

@@ -151,12 +151,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun loadConfiguration() {
         // Prefill with known values or saved preferences
-        workerUrlInput.setText(
-            preferences.workerUrl.ifEmpty { "https://wifi-failover.dhruv-anand.workers.dev" }
-        )
-        workerSecretInput.setText(
-            preferences.workerSecret.ifEmpty { "yZ0NDAKbwd24B9A4hjJxw2PTO+onteuBbe8RvWmqajo=" }
-        )
+        workerUrlInput.setText(preferences.workerUrl)
+        workerSecretInput.setText(preferences.workerSecret)
         hotspotSsidInput.setText(
             preferences.hotspotSsid.ifEmpty { "Dhruv's iPhone" }
         )
