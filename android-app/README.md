@@ -4,12 +4,13 @@ A minimal, lightweight native Android app that automatically enables your phone'
 
 ## Overview
 
-This app replaces the need for Tasker or Automate. It provides:
-- **Periodic polling** of the Cloudflare Worker (default: every 2 minutes)
+This is a native Android app that provides:
+- **Periodic polling** of the Cloudflare Worker (default: every 5 seconds)
 - **Automatic hotspot activation** when failover is triggered
+- **Device Admin permission** for reliable hotspot control
 - **Background execution** using WorkManager
 - **Auto-start on boot** via BOOT_COMPLETED receiver
-- **Simple settings UI** for configuration
+- **Simple settings UI** for easy configuration
 
 ## Architecture
 
@@ -25,9 +26,10 @@ This app replaces the need for Tasker or Automate. It provides:
                     ↓
 ┌─ Android App (this project) ───────────────┐
 │ • WorkManager periodic task               │
-│ • Polls /api/status every 2 minutes      │
+│ • Polls /api/status every 5 seconds      │
 │ • Enables hotspot if needed              │
 │ • Auto-starts on boot                    │
+│ • Device Admin for reliable control      │
 └────────────────────────────────────────────┘
 ```
 
@@ -96,7 +98,7 @@ When you open the app for the first time, you'll need to enter:
 3. **Phone Hotspot SSID** - The name of your phone's hotspot
    - Example: `Dhruv's Phone`
 
-4. **Polling Interval** - How often to check (default: 2 minutes)
+4. **Polling Interval** - How often to check (default: 5 seconds)
 
 ### Permissions Required
 The app will request:
@@ -117,15 +119,15 @@ The app will request:
 ### Startup
 1. Phone boots → BOOT_COMPLETED receiver triggers
 2. WorkManager schedules periodic task
-3. App starts polling the Worker every 2 minutes
+3. App starts polling the Worker every 5 seconds
 
 ### Normal Operation
-1. WorkManager wakes up every 2 minutes
+1. WorkManager wakes up every 5 seconds
 2. WiFiFailoverWorker GETs `/api/status` from your Worker
-3. If `hotspot_enabled = true`:
+3. If `daemon_status = "offline"`:
    - Enables phone hotspot
    - POSTs acknowledgment to Worker
-4. If `hotspot_enabled = false`:
+4. If `daemon_status = "online"` or `"paused"`:
    - Disables hotspot (if it was on)
 
 ### Failover Flow
@@ -144,10 +146,10 @@ The app will request:
 ### App won't enable hotspot
 1. Check phone settings: Settings → Network & Internet → Hotspot
 2. Try manually enabling hotspot first
-3. Check app permissions are granted
-4. Some Android versions require device admin or system app
-
-**Note:** Non-system apps have limited ability to control hotspot on modern Android versions. If you're on Android 12+, consider using **Tasker** or **Automate** which have Device Admin capabilities.
+3. Check app permissions are granted: Settings → Apps → WiFi Failover → Permissions
+4. Grant Device Admin permission: Settings → Apps → Special app access → Device admin apps → WiFi Failover (toggle ON)
+5. On Android 12+, disable battery optimization for the app
+6. Check app isn't in the battery saver exclusion list
 
 ### App not starting on boot
 1. Check BOOT_COMPLETED permission is granted
@@ -227,29 +229,24 @@ Run instrumented tests:
 ./gradlew ktlintFormat
 ```
 
+## Advantages
+
+✅ Native app - Better integration than 3rd party automation
+✅ Lightweight - ~10MB total
+✅ Simple configuration - Just 3 settings
+✅ Fast polling - 5 second response time
+✅ Device Admin - Reliable hotspot control
+✅ Open source - You can modify it
+✅ Auto-starts on boot - No manual setup needed
+✅ No 3rd party dependencies - Just Android native APIs
+
 ## Limitations
 
-- **Android 12+ hotspot control:** Non-system apps have limited access to hotspot APIs
-  - Workaround: Use Tasker/Automate with Device Admin, or root the device
-- **Cannot directly connect to hotspot:** Still requires manual connection or Mac automation
-- **Network-dependent:** Requires connected network to reach Worker (WorkManager constraint)
-- **No kill switch on notification:** Close app or disable monitoring to stop
-
-## Advantages Over Tasker/Automate
-
-✅ Native app - Better integration
-✅ Smaller footprint - ~2MB vs 50MB+
-✅ Simpler configuration - Just 3 settings
-✅ Better performance - Direct API calls
-✅ Open source - You can modify it
-✅ Auto-starts on boot - No manual trigger needed
-
-## Disadvantages
-
-❌ Requires Android 11+
-❌ Limited hotspot control on Android 12+ (non-system app)
-❌ No Device Admin (Tasker has this)
-❌ Less flexibility than Tasker's scripting
+- **Requires Android 11+** - Won't work on older devices
+- **Network-dependent** - Requires internet to reach Worker (WorkManager constraint)
+- **Hotspot must be configured** - Can enable but not configure hotspot name/password
+- **Battery usage** - ~1-2% per hour due to 5-second polling
+- **No automatic WiFi reconnection** - Mac handles the WiFi connection, not the app
 
 ## Security
 
@@ -283,6 +280,8 @@ For issues or questions:
 
 ---
 
-**Need Tasker/Automate instructions?** See the parent directory:
-- [AUTOMATE_SETUP.txt](../AUTOMATE_SETUP.txt)
-- [TASKER_SETUP.txt](../TASKER_SETUP.txt)
+## More Information
+
+For complete setup instructions including Cloudflare Worker deployment, see:
+- [Complete Setup Guide](../COMPLETE_SETUP_GUIDE.md)
+- [README](../README.md)

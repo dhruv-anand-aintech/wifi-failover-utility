@@ -1,10 +1,8 @@
 """Interactive CLI for WiFi Failover Utility setup"""
 
 import argparse
-import requests
 import subprocess
 import psutil
-import sys
 import time
 import os
 from pathlib import Path
@@ -169,26 +167,23 @@ def setup_interactive():
     config.set_worker_secret(worker_secret)
     print(f"✓ Configuration saved to: {config.config_file}")
 
-    # Generate Tasker instructions
-    print_section("Tasker Setup Instructions")
-    print("Generating Tasker setup guide for your phone...\n")
+    # Ask user if they want to start daemon now
+    print_section("Start Daemon")
+    response = input("Start the WiFi failover daemon now? (y/n): ").strip().lower()
 
-    output_path = Path.home() / "Desktop" / "TASKER_SETUP.txt"
-    save_tasker_instructions(worker_url, worker_secret, str(output_path))
-    print(f"\n📱 Open this file on your phone: {output_path}")
-    print("   Then follow the step-by-step instructions to configure Tasker.")
-
-    # Summary
-    print_section("Setup Complete! 🎉")
-    print("Next steps:")
-    print(f"  1. Copy TASKER_SETUP.txt to your phone")
-    print(f"  2. Follow the instructions to set up Tasker")
-    print(f"  3. Install the daemon:")
-    print(f"     sudo wifi-failover install-daemon")
-    print(f"  4. Start monitoring:")
-    print(f"     wifi-failover status")
-
-    return True
+    if response == 'y':
+        print("\nInstalling auto-start on login...")
+        setup_launchd_autostart()
+        print("\nStarting daemon in background...")
+        start_daemon_background()
+        return True
+    else:
+        print_section("Setup Complete! ✓")
+        print("\nTo start the daemon later, run:")
+        print("  wifi-failover daemon")
+        print("\nTo enable auto-start on login, run:")
+        print("  wifi-failover enable-autostart")
+        return True
 
 
 def kill_existing_daemons():
@@ -205,7 +200,7 @@ def kill_existing_daemons():
                         killed += 1
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 pass
-    except Exception as e:
+    except Exception:
         pass
     return killed
 

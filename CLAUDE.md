@@ -1,6 +1,6 @@
 # WiFi Failover Utility - Project Memory
 
-This project provides automatic WiFi failover to Android hotspot using a Cloudflare Worker relay and Tasker automation.
+This project provides automatic WiFi failover to Android hotspot using a Cloudflare Worker relay and native Android app.
 
 ## Project Overview
 
@@ -9,11 +9,11 @@ This project provides automatic WiFi failover to Android hotspot using a Cloudfl
 **Architecture:**
 ```
 macOS Daemon (python)
-    ↓ (HTTP POST)
+    ↓ (HTTP POST every 2s)
 Cloudflare Worker (KV storage)
-    ↑ (HTTP GET, every 2 min)
-Android Tasker
-    ↓ (enables hotspot)
+    ↑ (HTTP GET every 5s)
+Android App (native, WorkManager)
+    ↓ (enables hotspot via Device Admin)
 Mac reconnects via networksetup
 ```
 
@@ -25,19 +25,27 @@ Mac reconnects via networksetup
 wifi-failover-utility/
 ├── wifi_failover/
 │   ├── __init__.py
-│   ├── cli.py                 # Main: Interactive setup wizard + commands
-│   ├── config.py              # Auto-detect networks, load/save config
-│   ├── monitor.py             # Core daemon: connectivity checks, hotspot commands
-│   └── tasker_instructions.py # Generate Tasker setup guide
+│   ├── cli.py                 # Interactive setup wizard + daemon commands
+│   ├── config.py              # Network detection, config storage
+│   └── monitor.py             # Core daemon: connectivity checks, heartbeats
+├── android-app/               # Native Android app
+│   ├── app/src/main/
+│   │   ├── kotlin/com/wififailover/app/
+│   │   └── AndroidManifest.xml
+│   └── build.gradle
+├── src/
+│   └── index.js               # Cloudflare Worker
 ├── launchd/
-│   └── com.wifi-failover.monitor.plist  # macOS daemon config
+│   └── com.wifi-failover.monitor.plist  # macOS daemon auto-start
+├── .github/workflows/
+│   └── build-and-release.yml  # GitHub Actions APK builder
 ├── setup.py                   # Package metadata
+├── wrangler.toml              # Cloudflare Worker config
 ├── README.md                  # Feature overview
-├── SETUP_INSTRUCTIONS.md      # Quick start guide (15 min)
-├── COMPLETE_SETUP_GUIDE.md    # Detailed walkthrough with troubleshooting
-├── CLOUDFLARE_SETUP.md        # Cloudflare Worker deployment steps
+├── COMPLETE_SETUP_GUIDE.md    # Full setup walkthrough
+├── CLOUDFLARE_SETUP.md        # Worker deployment steps
 ├── LICENSE                    # MIT
-└── .gitignore
+└── CLAUDE.md                  # Project memory (this file)
 ```
 
 ## Key Features
@@ -60,10 +68,13 @@ wifi-failover-utility/
    - Stores monitored networks list, hotspot SSID, Worker URL/secret
    - Simple JSON format for manual editing
 
-4. **Tasker Guide Generator** (`wifi_failover.tasker_instructions`)
-   - Generates step-by-step instructions
-   - Embeds user's Worker URL and secret
-   - Covers: Device Admin, task creation, profile setup, testing
+4. **Native Android App** (`android-app/`)
+   - Built with Kotlin + Jetpack Compose
+   - WorkManager for 5-second polling
+   - Device Admin for hotspot control
+   - Auto-starts on boot
+   - Shows daemon status (online/paused/offline)
+   - Release builds via GitHub Actions
 
 ## How to Extend
 
@@ -99,13 +110,19 @@ Integrate with:
 
 Extend `monitor.py.logger` to send to external service.
 
-### Support Android Methods Beyond Tasker
+### Enhance the Android App
 
-- Termux + SSH for direct commands
-- scrcpy + adb automation
-- Android Debug Bridge (adb)
+Current implementation:
+- WorkManager for periodic polling (5 second interval)
+- Device Admin for hotspot control
+- Jetpack Compose for UI
 
-Create parallel implementation in new file: `android_tasker.py`, `android_adb.py`, etc.
+Possible enhancements:
+- Faster polling via foreground service (requires notification)
+- WiFi network auto-detection on Android
+- Rich notifications with action buttons
+- App shortcuts for quick start/stop
+- Accessibility service for more reliable hotspot control
 
 ## Important Implementation Details
 
@@ -128,11 +145,15 @@ Uses private Apple framework - not guaranteed stable across OS versions.
 - Mac POSTs commands, Android GETs status
 - Secret validation on both sides
 
-### Tasker Integration
-- Polls every 1-2 minutes (configurable)
-- Parses JSON response
-- Executes actions conditionally (IF hotspot_enabled = true)
-- Uses HTTP POST for acknowledgment
+### Android App Integration
+- **Polling**: WorkManager schedules task every 5 seconds
+- **Network Check**: Respects WorkManager network constraint (requires internet)
+- **Response Handling**: Parses `daemon_status` field:
+  - "online" → hotspot disabled (Mac has internet)
+  - "offline" → hotspot enabled (Mac lost internet)
+  - "paused" → hotspot disabled (Mac screen locked)
+- **Device Admin**: Uses Device Admin for reliable hotspot control
+- **Acknowledgment**: POSTs to `/api/acknowledge` after action
 
 ## Configuration Schema
 
@@ -150,25 +171,30 @@ Uses private Apple framework - not guaranteed stable across OS versions.
 ## Common Commands
 
 ```bash
-# Setup (interactive, auto-detects networks)
+# Setup wizard (interactive, auto-starts daemon)
 wifi-failover setup
 
 # Run daemon in foreground (for testing)
 wifi-failover start
 
+# Run daemon in background
+wifi-failover daemon
+
+# Enable auto-start on login
+wifi-failover enable-autostart
+
+# Disable auto-start on login
+wifi-failover disable-autostart
+
 # Show config and recent logs
 wifi-failover status
 
-# Display Tasker setup instructions
-wifi-failover tasker-guide
-
 # Watch daemon logs
-tail -f /tmp/wifi-failover/monitor.log
-tail -f /tmp/wifi-failover/stderr.log
+tail -f ~/.wifi-failover-logs/monitor.log
 
 # Check if running as daemon
 ps aux | grep wifi-failover
-sudo launchctl list | grep wifi-failover
+launchctl list | grep wifi-failover
 
 # Manually trigger failover (for testing)
 curl -X POST https://your-worker/api/command/enable \
@@ -239,8 +265,9 @@ def test_check_internet_connectivity():
 - Use different Worker secret than other projects
 - Rotate secret monthly
 - Encrypt config file if on shared system
-- Don't share Tasker backups publicly
+- Don't backup Android app with secrets enabled
 - Use VPN if Worker is accessed over untrusted networks
+- Disable auto-start if loaning phone to others
 
 ## Dependencies
 
@@ -283,19 +310,27 @@ def test_check_internet_connectivity():
 - Check KV namespace is configured
 - Verify secret matches
 
-**Tasker not running:**
-- Check Device Admin enabled in Tasker Preferences
-- Verify profile is active (Profiles tab)
-- Check battery optimization isn't blocking Tasker
-- Test manually: tap ▶ button
+**Android app not monitoring:**
+- Verify "Start Monitoring" button is enabled (shows "Stop Monitoring")
+- Check Device Admin is enabled: Settings → Apps → Special app access → Device admin apps → WiFi Failover
+- Check battery optimization: Settings → Battery → Battery saver → App restrictions
+- Check app is not disabled: Settings → Apps → WiFi Failover → Enabled
+- Check permissions: Settings → Apps → WiFi Failover → Permissions
 
 ## Future Improvements
 
 1. **Add unit + integration tests** - Currently manual only
-2. **Support PyPI publishing** - Currently git-only install
-3. **Add GUI dashboard** - Show daemon status, trigger failover manually
-4. **Multi-hotspot support** - Try multiple devices sequentially
-5. **Android alternatives** - ADB, Termux support beyond Tasker
+2. **PyPI package improvements** - Currently git install, could add auto-update checks
+3. **Android app enhancements**:
+   - Faster polling via ForegroundService (with notification)
+   - Rich notifications with action buttons
+   - App shortcuts for quick toggle
+   - WiFi network auto-detection on Android
+4. **macOS enhancements**:
+   - GUI dashboard for status monitoring
+   - One-click manual failover trigger
+   - Network auto-connect on recovery
+5. **Multi-hotspot support** - Try multiple devices sequentially
 6. **Metrics collection** - Track failovers, uptime, failures
 7. **Configuration UI** - Web dashboard instead of CLI wizard
 8. **Cross-platform** - Linux, Windows support (need network APIs)
