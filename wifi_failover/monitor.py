@@ -178,11 +178,21 @@ class WiFiFailoverMonitor:
 
     def _heartbeat_loop(self):
         """Background thread that sends heartbeats every 2 seconds"""
+        was_paused = False
         while not self.heartbeat_stop.is_set():
-            if not self.heartbeat_paused.is_set():
+            is_paused = self.heartbeat_paused.is_set()
+
+            # Log pause transition (only once)
+            if is_paused and not was_paused:
+                self.logger.warning("⏸️  HEARTBEATS PAUSED - simulating offline until resume")
+                was_paused = True
+            elif not is_paused and was_paused:
+                # This will be logged by resume_heartbeats(), so don't log here
+                was_paused = False
+
+            if not is_paused:
                 self.send_heartbeat()
-            else:
-                self.logger.info("⏸️  Heartbeats paused (testing mode)")
+
             time.sleep(2)
 
     def start_heartbeat_thread(self):
