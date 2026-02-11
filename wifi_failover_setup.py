@@ -15,8 +15,6 @@ or:       python wifi_failover_setup.py
 # ///
 
 import sys
-import subprocess
-from pathlib import Path
 
 
 def main():
