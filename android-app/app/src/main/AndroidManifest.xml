@@ -9,14 +9,14 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.BIND_ACCESSIBILITY_SERVICE" />
 
     <application
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:theme="@style/Theme.WiFiFailover"
-        android:name=".WiFiFailoverApp"
-        android:usesCleartextTraffic="false">
+        android:name=".WiFiFailoverApp">
 
         <activity
             android:name=".MainActivity"
@@ -37,17 +37,31 @@
             </intent-filter>
         </receiver>
 
-        <!-- Worker initialization (WorkManager handles this) -->
-        <provider
-            android:name="androidx.work.impl.WorkManagerInitializer"
-            android:authorities="${applicationId}.workmanager-init"
-            android:exported="false" />
+        <!-- Device admin receiver -->
+        <receiver
+            android:name=".receiver.AdminReceiver"
+            android:exported="true"
+            android:permission="android.permission.BIND_DEVICE_ADMIN">
+            <intent-filter>
+                <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.app.device_admin"
+                android:resource="@xml/device_admin_policy" />
+        </receiver>
 
-        <!-- Hilt initialization -->
-        <provider
-            android:name="com.google.dagger.hilt.android.internal.HiltWrapper"
-            android:authorities="${applicationId}.hilt-wrapper"
-            android:exported="false" />
+        <!-- Hotspot accessibility service -->
+        <service
+            android:name=".service.HotspotAccessibilityService"
+            android:exported="true"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config" />
+        </service>
 
     </application>
 

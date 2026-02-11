@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <TextView
+        android:id="@+id/titleText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/app_name"
+        android:textSize="24sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="16dp" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/statusLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/monitor_status"
+                android:textSize="16sp"
+                android:layout_marginTop="16dp"
+                android:layout_marginBottom="8dp" />
+
+            <TextView
+                android:id="@+id/statusValue"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/inactive"
+                android:textSize="14sp"
+                android:textColor="#888888" />
+
+            <EditText
+                android:id="@+id/workerUrlInput"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="@string/worker_url"
+                android:inputType="text"
+                android:layout_marginTop="16dp"
+                android:padding="8dp" />
+
+            <EditText
+                android:id="@+id/workerSecretInput"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="@string/worker_secret"
+                android:inputType="textPassword"
+                android:layout_marginTop="8dp"
+                android:padding="8dp" />
+
+            <EditText
+                android:id="@+id/hotspotSsidInput"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="@string/hotspot_ssid"
+                android:inputType="text"
+                android:layout_marginTop="8dp"
+                android:padding="8dp" />
+
+            <EditText
+                android:id="@+id/pollingIntervalInput"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="@string/polling_interval"
+                android:inputType="number"
+                android:layout_marginTop="8dp"
+                android:padding="8dp"
+                android:text="2" />
+
+        </LinearLayout>
+    </ScrollView>
+
+    <Button
+        android:id="@+id/saveButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/save_configuration"
+        android:layout_marginTop="16dp" />
+
+    <Button
+        android:id="@+id/monitorButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/start_monitoring"
+        android:layout_marginTop="8dp" />
+
+    <Button
+        android:id="@+id/deviceAdminButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/enable_device_admin"
+        android:layout_marginTop="8dp" />
+
+    <Button
+        android:id="@+id/testFailoverButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/test_failover"
+        android:layout_marginTop="8dp" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Debug Log"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:layout_marginTop="16dp"
+        android:layout_marginBottom="8dp" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="200dp"
+        android:layout_marginBottom="8dp">
+
+        <TextView
+            android:id="@+id/debugLog"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="12sp"
+            android:text="Waiting for commands..."
+            android:textColor="#666666"
+            android:padding="8dp"
+            android:fontFamily="monospace" />
+    </ScrollView>
+
+</LinearLayout>
