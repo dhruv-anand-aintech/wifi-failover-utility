@@ -35,7 +35,9 @@ class WiFiFailoverMonitor:
         self.heartbeat_thread = None
         self.heartbeat_stop = threading.Event()
         self.heartbeat_count = 0
+        self.heartbeat_failures = 0  # Track consecutive heartbeat failures
         self.last_lock_status = None  # Track lock status for change detection
+        self.reported_offline = False  # Track if we've reported offline to Worker
 
         # Setup logging
         if log_dir is None:
@@ -130,16 +132,45 @@ class WiFiFailoverMonitor:
             )
             if response.status_code == 200:
                 self.heartbeat_count += 1
+                self.heartbeat_failures = 0  # Reset failure count on success
+                self.reported_offline = False  # Reset offline flag
                 # Log every 10th heartbeat (~20 seconds)
                 if self.heartbeat_count % 10 == 0:
                     self.logger.info(f"♥ Heartbeats sent ({self.heartbeat_count}), status: {status}")
                 return True
             else:
-                self.logger.warning(f"Heartbeat failed: {response.status_code}")
+                self.heartbeat_failures += 1
+                self.logger.warning(f"Heartbeat failed: {response.status_code} (failures: {self.heartbeat_failures})")
                 return False
         except Exception as e:
-            self.logger.warning(f"Error sending heartbeat: {e}")
+            self.heartbeat_failures += 1
+            # Only log every 5th failure to reduce spam
+            if self.heartbeat_failures % 5 == 1:
+                self.logger.warning(f"Error sending heartbeat: {e} (failures: {self.heartbeat_failures})")
+
+            # After 3 consecutive failures, try to explicitly notify Worker of offline status
+            if self.heartbeat_failures == 3 and not self.reported_offline:
+                self._report_offline()
+
             return False
+
+    def _report_offline(self):
+        """Attempt to explicitly tell Worker that daemon is offline"""
+        try:
+            self.logger.info("⚠️  Daemon offline - attempting to notify Worker...")
+            response = requests.post(
+                f"{self.worker_url}/api/heartbeat",
+                json={"secret": self.worker_secret, "status": "offline"},
+                timeout=5  # Quick timeout for offline reporting
+            )
+            if response.status_code == 200:
+                self.logger.warning("✓ Successfully reported offline status to Worker")
+                self.reported_offline = True
+            else:
+                self.logger.warning(f"Failed to report offline (HTTP {response.status_code})")
+        except Exception as e:
+            # Worker likely unreachable, just log
+            self.logger.warning(f"Cannot report offline to Worker: {e}")
 
     def _heartbeat_loop(self):
         """Background thread that sends heartbeats every 2 seconds"""

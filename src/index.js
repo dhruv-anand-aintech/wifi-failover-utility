@@ -153,7 +153,7 @@ async function handleStatus(env) {
     const heartbeatStr = await env.WIFI_FAILOVER.get("daemon_heartbeat");
     const heartbeat = heartbeatStr ? JSON.parse(heartbeatStr) : {};
 
-    const HEARTBEAT_TIMEOUT = 15000; // 15 seconds
+    const HEARTBEAT_TIMEOUT = 12000; // 12 seconds = 6 heartbeat cycles (daemon sends every 2s)
     const now = Date.now();
     const lastHeartbeat = heartbeat.timestamp || 0;
     const timeSinceHeartbeat = now - lastHeartbeat;
@@ -161,9 +161,10 @@ async function handleStatus(env) {
     // Determine daemon status
     let daemon_status = "offline";
     if (timeSinceHeartbeat < HEARTBEAT_TIMEOUT) {
-      // Daemon is responsive
+      // Daemon is responsive (heartbeat is recent)
       daemon_status = heartbeat.status === "paused" ? "paused" : "online";
     }
+    // If timeSinceHeartbeat >= HEARTBEAT_TIMEOUT, daemon_status stays "offline"
 
     const daemon_online = daemon_status === "online";
 

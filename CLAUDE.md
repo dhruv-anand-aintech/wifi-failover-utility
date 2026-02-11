@@ -145,15 +145,31 @@ Uses private Apple framework - not guaranteed stable across OS versions.
 - Mac POSTs commands, Android GETs status
 - Secret validation on both sides
 
-### Android App Integration
-- **Polling**: WorkManager schedules task every 5 seconds
-- **Network Check**: Respects WorkManager network constraint (requires internet)
-- **Response Handling**: Parses `daemon_status` field:
-  - "online" → hotspot disabled (Mac has internet)
-  - "offline" → hotspot enabled (Mac lost internet)
-  - "paused" → hotspot disabled (Mac screen locked)
-- **Device Admin**: Uses Device Admin for reliable hotspot control
-- **Acknowledgment**: POSTs to `/api/acknowledge` after action
+### Android App Integration - Offline Detection Architecture
+
+⚠️ **IMPORTANT**: The Android app (NOT the Worker) is responsible for detecting daemon offline state.
+
+**Why**: When daemon loses internet, it CAN'T send heartbeats to Worker. So the daemon cannot explicitly tell the Worker it's offline - that's a logical impossibility.
+
+**How it works**:
+1. macOS daemon sends heartbeats every 2 seconds (when online)
+2. Cloudflare Worker stores `daemon_last_heartbeat` timestamp (just stores it, no timeout logic needed)
+3. Android app polls Worker every 5 seconds, gets `time_since_heartbeat`
+4. **Android app checks: if `time_since_heartbeat > 12 seconds` → daemon is offline** (gives 6 heartbeat cycles)
+5. If offline for 2 consecutive checks, enable hotspot
+
+**Current Implementation** (`WiFiFailoverWorker.kt`):
+- Checks `status.daemon_status` which is Worker-computed
+- **ISSUE**: Worker doesn't have timeout logic, so it keeps reporting "online" after daemon goes offline
+- **FIX**: Android app should check `time_since_heartbeat > 12000ms` directly, not rely on Worker's `daemon_status`
+
+**Response Fields Used**:
+- `daemon_last_heartbeat` - Unix timestamp (ms) of last heartbeat received
+- `time_since_heartbeat` - Milliseconds since last heartbeat (pre-computed by Worker for convenience)
+- `daemon_status` - Currently set by Worker (should be set by Android app logic instead)
+
+**Polling**: WorkManager schedules task every 5 seconds
+**Device Admin**: Uses Device Admin for reliable hotspot control
 
 ## Configuration Schema
 
