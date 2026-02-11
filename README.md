@@ -10,10 +10,10 @@ Automatic failover from WiFi to Android hotspot. When your primary WiFi network 
 │  (triggers hotspot command)            │
 │                                        │
 ├─ Android app polls Worker ────────────┤
-│  (Automate or Tasker, every 1-2 min)  │
+│  (native app, every 5 seconds)         │
 │                                        │
 ├─ Phone enables hotspot ───────────────┤
-│  (automatically via automation)        │
+│  (automatically via native app)        │
 │                                        │
 └─ Mac connects to hotspot ─────────────┘
    (using stored WiFi password)
@@ -22,10 +22,7 @@ Automatic failover from WiFi to Android hotspot. When your primary WiFi network 
 ## Requirements
 
 - **macOS** (tested on Big Sur+)
-- **Android phone** (Android 11+) with one of:
-  - **WiFi Failover App** (native, recommended - see `android-app/`)
-  - **Automate** (free, visual blocks)
-  - **Tasker** (~$3, more powerful)
+- **Android phone** (Android 11+) with WiFi Failover App (native app - see `android-app/`)
 - **Cloudflare account** (free tier is sufficient)
 - **Python 3.8+**
 
@@ -53,7 +50,7 @@ This interactive wizard will:
 - Request your phone's hotspot SSID
 - Prompt for Cloudflare Worker credentials
 - Save hotspot password to Keychain
-- Generate automation app setup instructions (Automate or Tasker)
+- Start the daemon automatically (optional)
 
 ### 3. Deploy Cloudflare Worker (if you don't have one)
 
@@ -61,36 +58,27 @@ See [CLOUDFLARE_SETUP.md](CLOUDFLARE_SETUP.md) for detailed instructions.
 
 The Worker URL and secret will be used in the setup wizard.
 
-### 4. Configure Android (Choose One)
+### 4. Install Android App
 
-**Option A: Native WiFi Failover App (Recommended):**
 ```bash
 # Build and install the native app
 cd android-app
 ./gradlew installDebug
+
+# Or transfer the APK and install via adb
+adb install android-app/app/build/outputs/apk/debug/app-debug.apk
 ```
-- Open app on phone
-- Enter: Worker URL, Secret, Hotspot SSID
-- Tap "Start Monitoring"
-- App automatically starts on boot
+
+**Setup on phone:**
+1. Open WiFi Failover app
+2. Tap "Enable Device Admin" and grant permission
+3. Enter Cloudflare Worker URL
+4. Enter Worker Secret
+5. Enter your hotspot SSID
+6. Tap "Start Monitoring"
+7. App will auto-start on device reboot
 
 See [android-app/README.md](android-app/README.md) for detailed instructions.
-
-**Option B: Automate (Visual Blocks):**
-```bash
-open ~/Desktop/AUTOMATE_SETUP.txt
-```
-- Install from Google Play Store
-- Follow the 5-step visual setup
-- No complex scripting needed
-
-**Option C: Tasker (Advanced):**
-```bash
-open ~/Desktop/TASKER_SETUP.txt
-```
-- Install from Google Play Store (~$3)
-- Enable Device Admin
-- Follow the 7-step task setup
 
 ### 5. Start monitoring
 
@@ -140,17 +128,23 @@ Edit this file directly or rerun `wifi-failover setup` to reconfigure.
 ## Commands
 
 ```bash
-# Interactive setup
+# Interactive setup (with option to start daemon)
 wifi-failover setup
 
-# Start monitoring (foreground)
+# Start monitoring in foreground (for testing)
 wifi-failover start
+
+# Start daemon in background
+wifi-failover daemon
+
+# Enable auto-start on login
+wifi-failover enable-autostart
+
+# Disable auto-start on login
+wifi-failover disable-autostart
 
 # Show current configuration and status
 wifi-failover status
-
-# Display Tasker setup instructions
-wifi-failover tasker-guide
 ```
 
 ## How It Works
@@ -172,29 +166,16 @@ wifi-failover tasker-guide
 - **GET** `/api/status` - Check command status
 - **POST** `/api/acknowledge` - Confirm action completed
 
-### Android (WiFi Failover App, Automate, or Tasker)
+### Android (WiFi Failover App - Native)
 
-**WiFi Failover App (Native - Recommended):**
-- Runs as background WorkManager task every 1-2 minutes
+- Runs as background WorkManager task every 5 seconds
 - GETs `/api/status` to check if hotspot should be enabled
 - Parses JSON response in Kotlin
-- If `hotspot_enabled = true`: enables hotspot via WifiManager
-- POSTs `/api/acknowledge` to confirm
-- Auto-starts on device boot
-
-**Automate (Visual blocks):**
-- Runs flow every 1-2 minutes (configurable)
-- GETs `/api/status` to check if hotspot should be enabled
-- Parses JSON response using visual blocks
-- If `hotspot_enabled = true`: enables hotspot
-- POSTs `/api/acknowledge` to confirm
-
-**Tasker (Script-based):**
-- Runs task every 1-2 minutes (configurable)
-- GETs `/api/status` to check if hotspot should be enabled
-- Parses JSON with JavaScript
-- If `hotspot_enabled = true`: enables hotspot
-- POSTs `/api/acknowledge` to confirm
+- If `daemon_status = "online"`: keeps hotspot disabled
+- If `daemon_status = "offline"`: enables hotspot automatically
+- POSTs `/api/acknowledge` to confirm action
+- Auto-starts on device boot via BootCompleteReceiver
+- Respects lock/sleep detection from daemon (paused status)
 
 ## Troubleshooting
 
@@ -211,26 +192,16 @@ sudo launchctl list | grep wifi-failover
 tail -f /tmp/wifi-failover/monitor.log
 ```
 
-### Hotspot not triggering
+### Hotspot not triggering (Android App)
 
-**If using WiFi Failover App:**
 - Verify "Start Monitoring" button shows "Stop Monitoring" (toggle is ON)
 - Check battery optimization: Settings → Battery → App not restricted
 - Check permissions: Settings → Apps → WiFi Failover → Permissions
+- Check Device Admin permission is enabled
 - Check logs: `adb logcat | grep WiFiFailover`
+- Verify Worker URL and Secret are correct in app settings
+- Test Worker manually: `curl https://your-worker/health`
 - On Android 12+, some versions limit hotspot control (see limitations)
-
-**If using Automate:**
-- Verify flow toggle is enabled (blue) in flows list
-- Check flow in battery optimization settings
-- Tap flow → ▶ Play to manually test
-- Check flow history for errors
-
-**If using Tasker:**
-- Verify Device Admin is enabled
-- Check profile is active
-- Run task manually (▶ button)
-- Check battery optimization isn't blocking Tasker
 
 ### Can't connect to hotspot
 
@@ -258,12 +229,13 @@ wifi-failover-utility/
 │   ├── __init__.py
 │   ├── cli.py                  # Interactive CLI
 │   ├── config.py               # Configuration management
-│   ├── monitor.py              # Main daemon logic
-│   └── tasker_instructions.py  # Tasker setup guide generator
+│   └── monitor.py              # Main daemon logic
+├── android-app/                # Native Android app
+│   └── app/src/main/kotlin/
 ├── launchd/
 │   └── com.wifi-failover.monitor.plist
-├── cloudflare/
-│   └── worker.js               # Cloudflare Worker code
+├── src/
+│   └── index.js                # Cloudflare Worker code
 ├── setup.py
 ├── README.md
 ├── CLOUDFLARE_SETUP.md
@@ -280,10 +252,11 @@ wifi-failover-utility/
 ## Limitations
 
 - Requires phone to be nearby (hotspot range ~30ft)
-- Tasker task runs every 1-2 min (affects failover response time)
 - If both networks fail, system can't help
 - Hotspot password must be stored in macOS Keychain
 - Android device must have internet to enable hotspot
+- Some Android 12+ devices restrict hotspot control via WifiManager
+- App polling every 5 seconds (battery usage ~1-2% per hour)
 
 ## Development
 

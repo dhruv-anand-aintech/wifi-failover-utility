@@ -1,18 +1,16 @@
 # Complete WiFi Failover Setup Guide
 
-This guide walks you through the complete setup process, from scratch to fully operational system.
+This guide walks you through setting up the complete WiFi failover system from scratch.
 
 ## Overview
 
 You'll need to:
 1. **Deploy a Cloudflare Worker** - Acts as the relay between Mac and Android
 2. **Install the utility on Mac** - Run the interactive setup
-3. **Configure Android Automation** - Set up the phone to listen for commands
-   - **Automate** (recommended - easier, visual)
-   - **Tasker** (alternative - more powerful)
+3. **Install the Android App** - Native app automatically monitors daemon
 4. **Test the system** - Verify everything works together
 
-Total time: **30-45 minutes**
+**Total time: ~20-30 minutes**
 
 ---
 
@@ -41,422 +39,267 @@ wrangler login
 
 This opens your browser to authorize Cloudflare access.
 
-### Step 1.3: Create KV Namespaces
+### Step 1.3: Clone and Deploy the Worker
 
 ```bash
-# Production namespace
+# Clone the repository
+git clone https://github.com/dhruv-anand-aintech/wifi-failover-utility.git
+cd wifi-failover-utility
+
+# Create KV namespace
 wrangler kv:namespace create "WIFI_FAILOVER"
-
-# Preview namespace (for testing)
 wrangler kv:namespace create "WIFI_FAILOVER" --preview
-```
 
-**Save the output** - you'll need the namespace IDs.
-
-Example output:
-```
-✨ Success!
-Add the following to your wrangler.toml:
-
-kv_namespaces = [
- { binding = "WIFI_FAILOVER", id = "abc123...", preview_id = "def456..." }
-]
-```
-
-### Step 1.4: Create Project Files
-
-Create these files in your Cloudflare Worker project directory:
-
-**File: `wrangler.toml`**
-```toml
-name = "wifi-failover"
-main = "src/index.js"
-compatibility_date = "2024-01-01"
-
-kv_namespaces = [
-  { binding = "WIFI_FAILOVER", id = "PASTE_YOUR_ID_HERE", preview_id = "PASTE_PREVIEW_ID_HERE" }
-]
-
-[triggers]
-crons = ["0 */10 * * * *"]
-```
-
-**Replace `PASTE_YOUR_ID_HERE` and `PASTE_PREVIEW_ID_HERE` with values from Step 1.3.**
-
-**File: `src/index.js`**
-
-Copy the Worker code from `CLOUDFLARE_SETUP.md` in the main README.
-
-### Step 1.5: Generate Secret
-
-Generate a random secret string:
-
-```bash
-# macOS/Linux
-openssl rand -base64 32
-
-# Copy the output - you'll use it later
-```
-
-**Save this secret somewhere safe.**
-
-### Step 1.6: Update Worker Code
-
-Edit `src/index.js` and replace `FAILOVER_SECRET`:
-
-```javascript
-const FAILOVER_SECRET = "YOUR_SECRET_FROM_STEP_1.5";
-```
-
-### Step 1.7: Deploy
-
-```bash
+# Update wrangler.toml with the namespace IDs (they'll be printed above)
+# Then deploy
 wrangler deploy
 ```
 
-**Save the Worker URL from the output** - looks like:
+The output will show your Worker URL, e.g.:
 ```
-https://wifi-failover-youraccount.workers.dev
+✨ Deployed to https://wifi-failover-xxxxx.workers.dev
 ```
 
-### Step 1.8: Test Worker
+**Save this URL** - you'll need it for the Mac setup.
+
+### Step 1.4: Verify Worker is Running
 
 ```bash
-# Test health endpoint
-curl https://wifi-failover-youraccount.workers.dev/health
-
-# Test status endpoint
-curl https://wifi-failover-youraccount.workers.dev/api/status
+curl https://your-worker-url/health
+# Should return: OK
 ```
-
-Both should respond with JSON.
 
 ---
 
-## Part 2: Install & Configure on Mac
+## Part 2: Install and Configure macOS Daemon
 
 ### Step 2.1: Install the Package
 
 ```bash
 # Using pip
-pip install git+https://github.com/yourusername/wifi-failover-utility.git
+pip install git+https://github.com/dhruv-anand-aintech/wifi-failover-utility.git
 
 # Or using uv
-uv pip install git+https://github.com/yourusername/wifi-failover-utility.git
+uv pip install git+https://github.com/dhruv-anand-aintech/wifi-failover-utility.git
 ```
 
-Verify installation:
-```bash
-wifi-failover --help
-```
-
-### Step 2.2: Run Interactive Setup
+### Step 2.2: Run Setup Wizard
 
 ```bash
 wifi-failover setup
 ```
 
-This will guide you through:
-- Selecting which WiFi networks to monitor
-- Entering your phone's hotspot SSID
-- Entering your Cloudflare Worker credentials
-- Saving hotspot password to Keychain
+This interactive wizard will ask for:
+1. **Networks to monitor** - Auto-detects available WiFi networks
+2. **Phone hotspot SSID** - The name that appears in WiFi settings
+3. **Worker URL** - The URL from Part 1 (https://wifi-failover-xxxxx.workers.dev)
+4. **Worker Secret** - Use a random strong string (suggestion: run `openssl rand -base64 32`)
+5. **Hotspot password** - Stored securely in macOS Keychain
 
-**During this setup, you'll need:**
-- Your phone's hotspot SSID (from Part 3 or ask your phone)
-- Cloudflare Worker URL (from Step 1.7)
-- Cloudflare Worker Secret (from Step 1.5)
+At the end, the wizard will ask if you want to start the daemon now.
 
-### Step 2.3: Test the Monitor
+### Step 2.3: Start the Daemon
+
+If you didn't start it in the wizard:
 
 ```bash
-# Run in foreground to see what happens
-wifi-failover start
+# Run in background
+wifi-failover daemon
 
-# Should log messages every 30 seconds
-# Press Ctrl+C to stop
+# Or enable auto-start on login
+wifi-failover enable-autostart
 ```
 
-Watch the output. You should see:
+Check the logs:
+```bash
+tail -f ~/.wifi-failover-logs/monitor.log
+```
+
+You should see:
 ```
 Starting WiFi failover monitor
-Networks to monitor: ['901 EXT5G']
-Hotspot SSID: Dhruv's iPhone
-Worker URL: https://wifi-failover-xxx.workers.dev
-...
-Network: 901 EXT5G, Internet: True, Failover: False
+Networks to monitor: ['Your WiFi']
+Hotspot SSID: Your Phone
 ```
 
-### Step 2.4: Install as Daemon (Optional)
+---
 
-To run automatically on Mac startup:
+## Part 3: Install Android App
+
+### Step 3.1: Get the APK
+
+**Option A: Download Latest Release**
+- Go to: https://github.com/dhruv-anand-aintech/wifi-failover-utility/releases
+- Download the latest `wifi-failover-*.apk`
+- Transfer to your phone via USB/email/cloud
+
+**Option B: Build Yourself**
+```bash
+cd android-app
+./gradlew assembleDebug
+# APK will be at: app/build/outputs/apk/debug/app-debug.apk
+```
+
+### Step 3.2: Install APK on Phone
+
+**Method 1: USB Installation (Recommended)**
+```bash
+adb install android-app/app/build/outputs/apk/debug/app-debug.apk
+```
+
+**Method 2: Manual Installation**
+1. Copy APK file to phone via cloud storage/email
+2. Open file manager on phone
+3. Tap the APK file
+4. Tap "Install"
+5. Grant requested permissions
+
+### Step 3.3: Configure App on Phone
+
+1. Open **WiFi Failover** app
+2. You should see:
+   - ❌ Device Admin NOT enabled
+   - ✓ Auto-start enabled
+3. Tap **"Enable Device Admin"**
+   - Go to Settings → Apps → Special app access → Device admin apps
+   - Toggle **WiFi Failover** ON
+4. Enter your **Worker URL** (from Part 1)
+5. Enter your **Worker Secret** (from Part 2)
+6. Enter your **Hotspot SSID** (from Part 2)
+7. Tap **"Start Monitoring"**
+
+The button should now show "Stop Monitoring" and the status should be green.
+
+### Step 3.4: Enable Auto-Start on Boot
+
+The app should auto-start, but verify in Settings:
+- Settings → Apps → WiFi Failover → Battery
+- Make sure battery optimization is **NOT** enabled for this app
+
+---
+
+## Part 4: Test the System
+
+### Test 1: Manual Failover Trigger
 
 ```bash
-# Copy the plist file
-sudo cp /path/to/com.wifi-failover.monitor.plist /Library/LaunchDaemons/
-
-# Fix permissions
-sudo chown root:wheel /Library/LaunchDaemons/com.wifi-failover.monitor.plist
-
-# Load it
-sudo launchctl load /Library/LaunchDaemons/com.wifi-failover.monitor.plist
-
-# Verify it's running
-ps aux | grep wifi-failover
-
-# Watch logs
-tail -f /tmp/wifi-failover/monitor.log
-```
-
----
-
-## Part 3: Configure Android Automation
-
-Choose one of the following based on your preference:
-
-### Option A: Automate (Recommended - Easier)
-
-**Why Automate?**
-- Visual block-based programming
-- Easier learning curve
-- Perfect for this use case
-- Free version has all needed features
-
-#### Step 3A.1: Install Automate
-
-1. Open Google Play Store on Android phone
-2. Search for "Automate" (by LlamaLab)
-3. Install the app (free version)
-
-#### Step 3A.2: Get Setup Instructions
-
-The setup file was created on your Mac:
-```
-~/Desktop/AUTOMATE_SETUP.txt
-```
-
-Transfer it to your phone and follow the **5 steps** to:
-1. Create a visual flow with HTTP GET, JSON parsing, and Hotspot blocks
-2. Add an IF/ELSE conditional
-3. Set up automatic 2-minute polling
-4. Test the flow
-
-#### Step 3A.3: Test Automate
-
-1. In Automate, verify the flow toggle is ON (blue)
-2. Tap the flow to open it
-3. Tap ▶ Play button to manually test
-4. Check that hotspot turns on/off correctly
-
----
-
-### Option B: Tasker (More Powerful)
-
-**Why Tasker?**
-- More advanced automation capabilities
-- Larger community support
-- More trigger options available
-- Better for complex workflows
-
-#### Step 3B.1: Install Tasker
-
-1. Open Google Play Store on Android phone
-2. Search for "Tasker"
-3. Install it (~$3)
-
-#### Step 3B.2: Enable Device Admin
-
-1. Open Tasker app
-2. Tap ≡ Menu → Preferences
-3. Scroll to "Misc"
-4. Toggle "Device Admin" ON
-5. Tap "Activate" when prompted
-
-#### Step 3B.3: Get Setup Instructions
-
-The setup file was created on your Mac:
-```
-~/Desktop/TASKER_SETUP.txt
-```
-
-Transfer it to your phone and follow the **7 steps** to:
-1. Create a task named "WiFi Failover Monitor"
-2. Add HTTP GET action to check status
-3. Add JSON parsing
-4. Add IF conditional
-5. Add Hotspot turn-on action
-6. Add HTTP POST acknowledgment
-7. Create a time-based Profile that runs every 2 minutes
-
-#### Step 3B.4: Test Tasker
-
-1. In Tasker, go to **Tasks** tab
-2. Find "WiFi Failover Monitor"
-3. Tap the **▶ Play button**
-4. Check Tasker log (Menu → More → Logcat) for any errors
-
----
-
-## Part 4: End-to-End Testing
-
-### Test 1: Trigger Failover Manually
-
-On your Mac:
-
-```bash
-# Get your secret from config
-grep worker_secret ~/.config/wifi-failover/config.json
-
-# Trigger failover
-curl -X POST https://wifi-failover-youraccount.workers.dev/api/command/enable \
+# On Mac, manually trigger failover (for testing)
+curl -X POST https://your-worker-url/api/command/enable \
   -H "Content-Type: application/json" \
-  -d '{"secret": "YOUR_SECRET"}'
+  -d '{"secret": "your-secret-here"}'
 
 # Check status
-curl https://wifi-failover-youraccount.workers.dev/api/status
+curl https://your-worker-url/api/status
 ```
 
-Should return:
-```json
-{"hotspot_enabled": true, "timestamp": 1234567890, "mac_acknowledged": false}
-```
+Check the Android app - it should show the daemon is "OFFLINE" and hotspot should enable.
 
-### Test 2: Run Tasker Task Manually
-
-1. Open Tasker on Android
-2. Go to Tasks tab
-3. Find "WiFi Failover Monitor"
-4. Tap ▶ Play button
-5. Wait a few seconds
-
-Expected behavior:
-- Phone's hotspot should turn ON
-- You should see it in WiFi networks
-- Logcat should show successful HTTP requests
-
-### Test 3: Mac Connects to Hotspot
-
-Once hotspot is enabled:
+### Test 2: Lock Detection
 
 ```bash
-# Manually connect
-networksetup -setairportnetwork en0 "Dhruv's iPhone" "your-hotspot-password"
+# Watch the daemon logs
+tail -f ~/.wifi-failover-logs/monitor.log
 
-# Or let the daemon do it (if running)
+# Lock your Mac: Cmd+Ctrl+Q
+# You should see within 2 seconds:
+# 🔒 Screen LOCKED - sending 'paused' status
+
+# Unlock your Mac
+# You should see:
+# 🔓 Screen UNLOCKED - sending 'active' status
 ```
 
-### Test 4: Full Failover Simulation
+Check the Android app - when screen is locked, it shows "PAUSED" status.
 
-**Prerequisites:**
-- Mac is on monitored WiFi network (e.g., "901 EXT5G")
-- Daemon is running
-- Hotspot password is in Keychain
-- Tasker profile is active on Android
+### Test 3: Real Failover
 
-**Steps:**
-1. Turn off your WiFi router (or disconnect the monitored network)
-2. Watch Mac daemon logs:
-   ```bash
-   tail -f /tmp/wifi-failover/monitor.log
-   ```
-3. You should see:
-   - "Connectivity lost" warning
-   - "Triggering failover" message
-   - "Waiting for hotspot to activate..."
-   - "Connected to hotspot" success message
-4. Verify Mac has internet:
-   ```bash
-   ping google.com
-   ```
-5. Turn router back on, wait 3+ successful pings
-6. Watch daemon disable hotspot automatically
+1. Make sure daemon and app are running
+2. On your phone, turn off WiFi (airplane mode or disable WiFi)
+3. Watch the daemon logs - it should detect loss after ~60 seconds
+4. The app should receive the enable command
+5. Phone hotspot should turn on automatically
+6. Mac should connect to hotspot
+7. Turn WiFi back on the phone
+8. After 3 successful pings, Mac disconnects from hotspot
 
 ---
 
 ## Troubleshooting
 
-### Mac Setup Issues
+### "Worker URL is invalid"
+- Make sure Worker URL starts with `https://`
+- Check that Worker deployed successfully: `curl https://your-url/health`
 
-**"Configuration incomplete"**
-- Run `wifi-failover setup` again
-- Make sure you saved all values
+### "Configuration incomplete"
+- Make sure you selected at least one network
+- Hotspot SSID cannot be empty
+- Worker URL and secret must be provided
 
-**"Worker not responding"**
+### Daemon not starting
 ```bash
-# Test Worker directly
-curl https://your-worker-url/health
-curl https://your-worker-url/api/status
-```
-- Check Worker URL is correct
-- Verify Cloudflare deployment was successful
+# Check if already running
+ps aux | grep wifi-failover
 
-**"Can't connect to hotspot"**
-```bash
-# Check password is in Keychain
-security find-generic-password -wa "Dhruv's iPhone"
+# View logs
+cat ~/.wifi-failover-logs/monitor.log
+cat ~/.wifi-failover-logs/daemon.log
 
-# Test manual connection
-networksetup -setairportnetwork en0 "Dhruv's iPhone" "password"
+# Try running in foreground to see errors
+wifi-failover start
 ```
 
-### Android Automation Issues
-
-**Automate Issues:**
-
-**"Flow doesn't run"**
-- Check toggle is ON (blue) next to flow name
-- Verify Automate has background execution enabled
-- Check battery optimization isn't blocking Automate
-- Tap ▶ Play to manually test the flow
-- Check flow history (History tab) for execution logs
-
-**"Hotspot doesn't enable"**
-- Test manual hotspot toggle on phone first
-- Verify HTTP blocks show correct responses
-- Tap individual block names to see debug output
-- Check internet connectivity during flow run
-
-**"HTTP request fails"**
+### Android app not receiving commands
+- Verify "Start Monitoring" is enabled (button shows "Stop Monitoring")
+- Check Device Admin is enabled: Settings → Apps → Special app access → Device admin
+- Verify Worker URL and Secret are correct
 - Check phone has internet connection
-- Verify Worker URL is exactly correct
-- Test URL in phone browser
-- Check flow history for error messages
+- Check app isn't in battery optimization
+
+### Hotspot won't auto-enable
+- Verify password is stored in Keychain (mac side):
+  ```bash
+  security find-generic-password -wa "Hotspot Name"
+  ```
+- On Android 12+, manual WiFi control may be restricted - enable Developer Options and check WiFi restrictions
+- Verify hotspot password is correct on phone
+
+### Can't connect to hotspot
+Test manual connection first:
+```bash
+networksetup -setairportnetwork en0 "Hotspot Name" "Password"
+```
+
+If that works, the issue is the daemon. If it fails, the issue is macOS WiFi settings.
+
+### Check Daemon Status
+```bash
+# Quick status
+wifi-failover status
+
+# Full logs
+tail -50 ~/.wifi-failover-logs/monitor.log
+
+# Check launchd (if installed as daemon)
+launchctl list | grep wifi-failover
+```
 
 ---
 
-**Tasker Issues:**
+## Configuration Reference
 
-**"Task doesn't run"**
-- Verify Device Admin is enabled
-- Check Profile is active (Profiles tab)
-- Check app battery optimization isn't blocking Tasker
-- Manually test task with ▶ button
+Configuration is stored in: `~/.config/wifi-failover/config.json`
 
-**"Hotspot doesn't enable"**
-- Test manual hotspot toggle on phone first
-- Try shell command instead: `cmd connectivity tether wifi start`
-- Some Android versions require different commands
-
-**"HTTP request fails"**
-- Check phone has internet
-- Verify Worker URL is correct
-- Test URL in phone browser
-- Check Logcat for error details
-
-### General Issues
-
-**"Daemon crashes"**
-```bash
-tail -f /tmp/wifi-failover/stderr.log
-tail -f /tmp/wifi-failover/monitor.log
+```json
+{
+  "monitored_networks": ["WiFi1", "WiFi2"],
+  "hotspot_ssid": "My iPhone",
+  "worker_url": "https://wifi-failover-xxxxx.workers.dev",
+  "worker_secret": "your-secret-key-here"
+}
 ```
 
-**"Wrong network detected"**
+To reconfigure:
 ```bash
-# Check available networks
-/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport -s
-
-# Reconfigure
 wifi-failover setup
 ```
 
@@ -464,39 +307,11 @@ wifi-failover setup
 
 ## Next Steps
 
-Once everything is working:
+- ✅ Daemon is running and sending heartbeats
+- ✅ Android app is monitoring and polling
+- ✅ System is ready for automatic failover
 
-1. **Monitor logs regularly**
-   ```bash
-   tail -f /tmp/wifi-failover/monitor.log
-   ```
-
-2. **Test periodically** (monthly or after macOS updates)
-
-3. **Keep secrets safe**
-   - Don't commit config files to git
-   - Don't share Tasker backups publicly
-   - Consider rotating Worker secret annually
-
-4. **Improve the setup** - Feel free to:
-   - Add more monitored networks
-   - Adjust polling intervals (edit config)
-   - Contribute improvements to the project
-
----
-
-## Support
-
-If you encounter issues:
-
-1. **Check logs** - Usually the most helpful
-2. **Review Troubleshooting** section above
-3. **Test each component separately:**
-   - Worker: Use curl
-   - Mac daemon: Run in foreground
-   - Tasker: Manually run task
-4. **Open a GitHub issue** with:
-   - Error messages
-   - Relevant logs (remove secrets)
-   - Setup steps taken
-   - Android/macOS versions
+For issues or questions:
+- Check the troubleshooting section above
+- Review [README.md](README.md) for more details
+- Open a GitHub issue: https://github.com/dhruv-anand-aintech/wifi-failover-utility/issues
