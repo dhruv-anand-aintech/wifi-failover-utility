@@ -28,31 +28,31 @@ Automatic failover from WiFi to Android hotspot. When your primary WiFi network 
 
 ## Quick Start
 
-### Option 1: Clone + `uv run` (Fastest)
-
+### Option 1: Clone + `uv run` (Fastest - No Installation)
 ```bash
 git clone https://github.com/dhruv-anand-aintech/wifi-failover-utility.git
 cd wifi-failover-utility
 uv run wifi_failover_setup.py
 ```
+Uses isolated environment with inline dependencies (PEP 723).
 
-Uses isolated environment with inline dependencies (PEP 723). No global installation needed!
-
-### Option 2: Install Package
-
-**Using pip:**
+### Option 2: Install with pip (Most Compatible)
 ```bash
 pip install git+https://github.com/dhruv-anand-aintech/wifi-failover-utility.git
 wifi-failover setup
 ```
 
-**Using uv:**
+### Option 3: Install with uv
 ```bash
 uv pip install git+https://github.com/dhruv-anand-aintech/wifi-failover-utility.git
 wifi-failover setup
 ```
 
-Both options will prompt you to configure networks, hotspot, and Worker credentials.
+All methods launch an interactive setup wizard that configures:
+- Networks to monitor
+- Phone's hotspot SSID
+- Cloudflare Worker URL & Secret
+- Optional daemon auto-start
 
 ### Step 3: Deploy Cloudflare Worker (if you don't have one)
 
