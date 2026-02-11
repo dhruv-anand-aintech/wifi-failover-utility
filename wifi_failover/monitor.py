@@ -97,9 +97,12 @@ class WiFiFailoverMonitor:
             result = subprocess.run(
                 ["ping", "-c", "1", "-W", str(timeout * 1000), host],
                 capture_output=True,
-                timeout=timeout + 1
+                timeout=timeout + 3
             )
             return result.returncode == 0
+        except subprocess.TimeoutExpired:
+            # Ping timed out - treat as no connectivity
+            return False
         except Exception as e:
             self.logger.error(f"Error checking connectivity: {e}")
             return False
