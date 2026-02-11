@@ -4,6 +4,7 @@ import argparse
 import subprocess
 import psutil
 import os
+from time import sleep
 from pathlib import Path
 from .config import Config
 from .monitor import WiFiFailoverMonitor
@@ -165,6 +166,87 @@ def save_hotspot_password(hotspot_ssid: str, env_vars: dict = None):
             print(f"❌ Error saving to Keychain: {e}")
 
 
+def setup_non_interactive():
+    """Non-interactive setup using environment variables"""
+    print_section("Setting Up WiFi Failover (Non-Interactive Mode)")
+
+    # Load environment variables
+    env_vars = load_env_file()
+
+    # Get values from environment
+    hotspot_ssid = env_vars.get("HOTSPOT_SSID") or os.getenv("HOTSPOT_SSID")
+    worker_url = env_vars.get("WORKER_URL") or os.getenv("WORKER_URL")
+    worker_secret = env_vars.get("WORKER_SECRET") or os.getenv("WORKER_SECRET")
+
+    # Validate all required variables are present
+    missing = []
+    if not hotspot_ssid:
+        missing.append("HOTSPOT_SSID")
+    if not worker_url:
+        missing.append("WORKER_URL")
+    if not worker_secret:
+        missing.append("WORKER_SECRET")
+
+    if missing:
+        print(f"❌ Missing environment variables: {', '.join(missing)}")
+        print("   Set these variables before running setup --non-interactive")
+        return False
+
+    # Validate worker URL
+    if not worker_url.startswith("https://"):
+        print("❌ WORKER_URL must start with https://")
+        return False
+
+    print(f"✓ Hotspot: {hotspot_ssid}")
+    print(f"✓ Worker URL: {worker_url}")
+    print()
+
+    # Kill existing daemons
+    print("Killing existing daemon processes...")
+    killed = kill_existing_daemons()
+    if killed > 0:
+        print(f"✓ Killed {killed} existing process(es)")
+    else:
+        print(f"✓ No existing processes found")
+
+    # Save configuration
+    print("Saving configuration...")
+    config = Config()
+    config.set_hotspot_ssid(hotspot_ssid)
+    config.set_worker_url(worker_url)
+    config.set_worker_secret(worker_secret)
+    print(f"✓ Configuration saved to: {config.config_file}")
+
+    # Optional: Save hotspot password if provided
+    hotspot_password = env_vars.get("HOTSPOT_PASSWORD") or os.getenv("HOTSPOT_PASSWORD")
+    if hotspot_password:
+        print("Saving hotspot password to Keychain...")
+        try:
+            subprocess.run(
+                ["security", "delete-generic-password", "-a", hotspot_ssid, "-s", hotspot_ssid],
+                capture_output=True,
+                timeout=5
+            )
+            subprocess.run(
+                ["security", "add-generic-password", "-a", hotspot_ssid, "-s", hotspot_ssid, "-w", hotspot_password],
+                check=True,
+                capture_output=True,
+                timeout=5
+            )
+            print(f"✓ Password saved to Keychain")
+        except Exception as e:
+            print(f"⚠️  Could not save password: {e}")
+
+    # Start daemon
+    print_section("Starting Daemon")
+    if start_daemon_launchd():
+        print_section("Setup Complete! ✓")
+        return True
+    else:
+        print("❌ Failed to start daemon")
+        return False
+
+
 def setup_interactive():
     """Run interactive setup wizard"""
     print_banner()
@@ -213,19 +295,42 @@ def setup_interactive():
 def kill_existing_daemons():
     """Kill any existing WiFi failover daemon processes"""
     killed = 0
+
+    # First, stop the launchd service
+    try:
+        subprocess.run(
+            ["launchctl", "stop", "com.wifi-failover.monitor"],
+            capture_output=True,
+            timeout=5
+        )
+    except Exception:
+        pass
+
     try:
         for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
             try:
                 cmdline = proc.info.get('cmdline') or []
-                # Check if this is our daemon process
-                if any('wifi_failover' in str(arg) and 'start' in str(arg) for arg in cmdline):
-                    if proc.pid != os.getpid():  # Don't kill ourselves
+                cmdline_str = ' '.join(str(arg) for arg in cmdline)
+
+                # Match daemon processes: wifi-failover, wifi_failover, or monitor.py
+                is_daemon = any([
+                    'wifi-failover' in cmdline_str and 'daemon' in cmdline_str,
+                    'wifi_failover' in cmdline_str and 'daemon' in cmdline_str,
+                    'monitor.py' in cmdline_str and 'wifi-failover' in cmdline_str,
+                    'monitor.py' in cmdline_str and 'home-debug' in cmdline_str,
+                ])
+
+                if is_daemon and proc.pid != os.getpid():  # Don't kill ourselves
+                    try:
                         proc.kill()
                         killed += 1
+                    except (psutil.NoSuchProcess, psutil.AccessDenied):
+                        pass
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 pass
     except Exception:
         pass
+
     return killed
 
 
@@ -233,22 +338,78 @@ def setup_launchd_autostart():
     """Install and enable launchd auto-start on login"""
     print_section("Setting Up Auto-Start on Login")
 
-    # Plist file is in the same directory as this module
-    plist_source = Path(__file__).parent / "com.wifi-failover.monitor.plist"
     plist_dest = Path.home() / "Library" / "LaunchAgents" / "com.wifi-failover.monitor.plist"
 
-    if not plist_source.exists():
-        print(f"❌ Plist file not found: {plist_source}")
-        return False
-
     try:
+        # Get the actual path to the wifi-failover binary
+        result = subprocess.run(
+            ["which", "wifi-failover"],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        wifi_failover_path = result.stdout.strip()
+
         # Create LaunchAgents directory if needed
         plist_dest.parent.mkdir(parents=True, exist_ok=True)
 
-        # Copy plist file
-        import shutil
-        shutil.copy(plist_source, plist_dest)
-        print(f"✓ Copied plist to {plist_dest}")
+        # Generate plist dynamically with the correct path
+        log_dir = Path.home() / ".wifi-failover-logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+
+        plist_content = f"""<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.wifi-failover.monitor</string>
+
+	<key>Program</key>
+	<string>{wifi_failover_path}</string>
+
+	<key>ProgramArguments</key>
+	<array>
+		<string>{wifi_failover_path}</string>
+		<string>daemon</string>
+	</array>
+
+	<key>RunAtLoad</key>
+	<true/>
+
+	<key>KeepAlive</key>
+	<true/>
+
+	<key>StandardOutPath</key>
+	<string>{log_dir}/launchd-stdout.log</string>
+
+	<key>StandardErrorPath</key>
+	<string>{log_dir}/launchd-stderr.log</string>
+
+	<key>ProcessType</key>
+	<string>Background</string>
+
+	<key>Nice</key>
+	<integer>10</integer>
+
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>PATH</key>
+		<string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+	</dict>
+
+	<!-- Auto-restart if it crashes -->
+	<key>Restart</key>
+	<string>OnFailure</string>
+
+	<!-- Wait 10 seconds before restarting -->
+	<key>StartInterval</key>
+	<integer>10</integer>
+</dict>
+</plist>
+"""
+
+        plist_dest.write_text(plist_content)
+        print(f"✓ Generated plist with correct path: {wifi_failover_path}")
 
         # Load the plist with launchctl
         result = subprocess.run(
@@ -302,20 +463,26 @@ def disable_launchd_autostart():
 
 
 def start_daemon_launchd():
-    """Start the daemon using launchctl (requires auto-start to be set up)"""
+    """Start the daemon using launchctl"""
     plist_dest = Path.home() / "Library" / "LaunchAgents" / "com.wifi-failover.monitor.plist"
 
-    if not plist_dest.exists():
-        print(f"❌ Auto-start not configured. Run 'wifi-failover enable-autostart' first.")
-        return False
-
     try:
-        # First, try to unload any existing daemon
-        subprocess.run(
-            ["launchctl", "unload", str(plist_dest)],
-            capture_output=True,
-            timeout=5
-        )
+        # Kill any existing daemon processes
+        kill_existing_daemons()
+
+        # If plist doesn't exist, set it up first
+        if not plist_dest.exists():
+            print_section("Setting Up Auto-Start")
+            if not setup_launchd_autostart():
+                return False
+        else:
+            # Unload and reload to pick up any changes
+            subprocess.run(
+                ["launchctl", "unload", str(plist_dest)],
+                capture_output=True,
+                timeout=5
+            )
+            sleep(1)
 
         # Load the plist
         result = subprocess.run(
@@ -450,7 +617,12 @@ def main():
     subparsers = parser.add_subparsers(dest="command", help="Command to run")
 
     # Setup command
-    subparsers.add_parser("setup", help="Interactive setup wizard")
+    setup_parser = subparsers.add_parser("setup", help="Interactive setup wizard")
+    setup_parser.add_argument(
+        "--non-interactive",
+        action="store_true",
+        help="Use environment variables (HOTSPOT_SSID, WORKER_URL, WORKER_SECRET) and auto-start daemon"
+    )
 
     # Daemon command
     subparsers.add_parser("daemon", help="Start daemon (kills existing, runs in background)")
@@ -490,7 +662,10 @@ def main():
             return
 
     if args.command == "setup":
-        setup_interactive()
+        if hasattr(args, 'non_interactive') and args.non_interactive:
+            setup_non_interactive()
+        else:
+            setup_interactive()
     elif args.command == "daemon":
         start_daemon_launchd()
     elif args.command == "enable-autostart":
