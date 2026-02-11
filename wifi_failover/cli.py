@@ -432,27 +432,6 @@ def main():
 
     args = parser.parse_args()
 
-    # Check if configuration exists - if not and command requires it, run setup first
-    config = Config()
-    config_exists = (
-        config.get_monitored_networks() and
-        config.get_hotspot_ssid() and
-        config.get_worker_url() and
-        config.get_worker_secret()
-    )
-
-    requires_config = args.command in ("daemon", "start", "status", None)
-
-    if requires_config and not config_exists and args.command != "setup":
-        print("\n⚠️  WiFi Failover Utility - First Run Setup\n")
-        print("No configuration found. Running setup wizard...\n")
-        time.sleep(1)
-        if setup_interactive():
-            print("\n✅ Configuration saved! You can now run commands.\n")
-        else:
-            print("\n❌ Setup cancelled. Run 'wifi-failover setup' to configure later.\n")
-            return
-
     if args.command == "setup":
         setup_interactive()
     elif args.command == "daemon":

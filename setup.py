@@ -1,7 +1,29 @@
 from setuptools import setup, find_packages
+from setuptools.command.install import install as _install
 
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
+
+
+class PostInstallCommand(_install):
+    """Custom install command that runs setup wizard after installation"""
+
+    def run(self):
+        _install.run(self)
+        print("\n" + "="*80)
+        print("WiFi Failover Utility - Setup Wizard")
+        print("="*80 + "\n")
+        print("Running interactive setup...\n")
+
+        # Import after installation so all dependencies are available
+        from wifi_failover.cli import setup_interactive
+
+        try:
+            setup_interactive()
+        except Exception as e:
+            print(f"\n⚠️  Setup wizard failed: {e}")
+            print("You can run setup later with: wifi-failover setup\n")
+
 
 setup(
     name="wifi-failover-utility",
@@ -27,5 +49,8 @@ setup(
         "console_scripts": [
             "wifi-failover=wifi_failover.cli:main",
         ],
+    },
+    cmdclass={
+        "install": PostInstallCommand,
     },
 )
