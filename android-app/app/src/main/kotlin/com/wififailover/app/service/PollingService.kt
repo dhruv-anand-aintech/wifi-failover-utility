@@ -22,8 +22,8 @@ class PollingService : Service() {
     private lateinit var preferences: Preferences
     private lateinit var hotspotService: HotspotService
     private var daemonOfflineCount = 0
-    private val DAEMON_OFFLINE_THRESHOLD = 2
-    private val POLLING_INTERVAL_SECONDS = 10
+    private val DAEMON_OFFLINE_THRESHOLD = 2  // Enable hotspot after 2 consecutive offline checks (~10 seconds)
+    private val POLLING_INTERVAL_SECONDS = 5   // Poll every 5 seconds
 
     companion object {
         const val NOTIFICATION_ID = 1001

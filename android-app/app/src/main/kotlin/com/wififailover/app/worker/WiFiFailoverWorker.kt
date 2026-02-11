@@ -17,7 +17,7 @@ class WiFiFailoverWorker(context: Context, params: WorkerParameters) : Coroutine
 
     companion object {
         private const val OFFLINE_COUNT_KEY = "daemon_offline_count"
-        private const val OFFLINE_THRESHOLD = 2
+        private const val OFFLINE_THRESHOLD = 2  // Enable hotspot after 2 consecutive offline checks (~10 seconds)
     }
 
     override suspend fun doWork(): Result {

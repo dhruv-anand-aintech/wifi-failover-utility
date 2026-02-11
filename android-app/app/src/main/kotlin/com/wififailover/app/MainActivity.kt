@@ -51,7 +51,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var adminComponent: ComponentName
     private val debugMessages = mutableListOf<String>()
     private var daemonOfflineCount = 0
-    private val DAEMON_OFFLINE_THRESHOLD = 2 // Enable hotspot after 2 consecutive offline checks
+    private val DAEMON_OFFLINE_THRESHOLD = 2 // Enable hotspot after 2 consecutive offline checks (~10 seconds)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -212,9 +212,9 @@ class MainActivity : AppCompatActivity() {
 
     private fun startMonitoring() {
         preferences.monitoringEnabled = true
-        // Schedule background polling via WorkManager (runs every 10 seconds)
+        // Schedule background polling via WorkManager (runs every 5 seconds)
         val workRequest = PeriodicWorkRequestBuilder<WiFiFailoverWorker>(
-            10,
+            5,
             TimeUnit.SECONDS
         ).build()
 
