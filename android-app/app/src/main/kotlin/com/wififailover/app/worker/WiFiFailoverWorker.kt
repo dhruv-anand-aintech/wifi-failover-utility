@@ -64,6 +64,20 @@ class WiFiFailoverWorker(context: Context, params: WorkerParameters) : Coroutine
             Result.success()
         } catch (e: Exception) {
             e.printStackTrace()
+            // Treat failures to contact the Worker as daemon being offline
+            // This handles cases where daemon is offline (can't send heartbeats to Worker)
+            val offlineCount = sharedPrefs.getInt(OFFLINE_COUNT_KEY, 0) + 1
+            sharedPrefs.edit().putInt(OFFLINE_COUNT_KEY, offlineCount).apply()
+
+            if (offlineCount >= OFFLINE_THRESHOLD) {
+                val hotspotEnabled = hotspotService.enableHotspot()
+                if (hotspotEnabled) {
+                    showNotification("WiFi Failover", "Daemon offline - hotspot enabled")
+                } else {
+                    showNotification("WiFi Failover", "Daemon offline - enable hotspot manually")
+                }
+            }
+
             Result.retry()
         }
     }
