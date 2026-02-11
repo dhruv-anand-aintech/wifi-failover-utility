@@ -310,10 +310,30 @@ def start_daemon_launchd():
         return False
 
     try:
+        # First, try to unload any existing daemon
+        subprocess.run(
+            ["launchctl", "unload", str(plist_dest)],
+            capture_output=True,
+            timeout=5
+        )
+
+        # Load the plist
+        result = subprocess.run(
+            ["launchctl", "load", str(plist_dest)],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+
+        if result.returncode != 0 and "already loaded" not in result.stderr.lower():
+            print(f"⚠️  Warning loading plist: {result.stderr}")
+
+        # Start the daemon
         result = subprocess.run(
             ["launchctl", "start", "com.wifi-failover.monitor"],
             capture_output=True,
-            text=True
+            text=True,
+            timeout=5
         )
 
         if result.returncode == 0:
