@@ -243,29 +243,38 @@ class MainActivity : AppCompatActivity() {
                 val api = WorkerApi.create(preferences.workerUrl)
                 val status = api.getStatus(preferences.workerSecret)
 
-                addDebugLog("Poll: daemon_online=${status.daemon_online} (${status.time_since_heartbeat}ms)")
+                addDebugLog("Poll: daemon_status=${status.daemon_status} (${status.time_since_heartbeat}ms)")
 
-                if (status.daemon_online) {
-                    // Daemon is online, reset counter
-                    daemonOfflineCount = 0
-                    addDebugLog("✓ Daemon is ONLINE")
-                } else {
-                    // Daemon is offline, increment counter
-                    daemonOfflineCount++
-                    addDebugLog("✗ Daemon OFFLINE (check #$daemonOfflineCount)")
+                when (status.daemon_status) {
+                    "online" -> {
+                        // Daemon is online, reset counter
+                        daemonOfflineCount = 0
+                        addDebugLog("✓ Daemon is ONLINE")
+                    }
+                    "paused" -> {
+                        // Daemon is paused (screen locked/sleeping), reset counter
+                        // Don't trigger failover when computer is asleep
+                        daemonOfflineCount = 0
+                        addDebugLog("⏸ Daemon is PAUSED (screen locked)")
+                    }
+                    "offline" -> {
+                        // Daemon is offline, increment counter
+                        daemonOfflineCount++
+                        addDebugLog("✗ Daemon OFFLINE (check #$daemonOfflineCount)")
 
-                    if (daemonOfflineCount >= DAEMON_OFFLINE_THRESHOLD) {
-                        addDebugLog("🚨 Daemon offline for $DAEMON_OFFLINE_THRESHOLD checks - enabling hotspot!")
+                        if (daemonOfflineCount >= DAEMON_OFFLINE_THRESHOLD) {
+                            addDebugLog("🚨 Daemon offline for $DAEMON_OFFLINE_THRESHOLD checks - enabling hotspot!")
 
-                        // Automatically enable hotspot when daemon is offline
-                        val hotspotEnabled = hotspotService.enableHotspot()
+                            // Automatically enable hotspot when daemon is offline
+                            val hotspotEnabled = hotspotService.enableHotspot()
 
-                        if (hotspotEnabled) {
-                            addDebugLog("✓ Hotspot enabled successfully")
-                            showNotification("WiFi Failover", "Daemon offline - hotspot enabled")
-                        } else {
-                            addDebugLog("✗ Hotspot enable failed - check logs")
-                            showNotification("WiFi Failover", "Daemon offline - enable hotspot manually")
+                            if (hotspotEnabled) {
+                                addDebugLog("✓ Hotspot enabled successfully")
+                                showNotification("WiFi Failover", "Daemon offline - hotspot enabled")
+                            } else {
+                                addDebugLog("✗ Hotspot enable failed - check logs")
+                                showNotification("WiFi Failover", "Daemon offline - enable hotspot manually")
+                            }
                         }
                     }
                 }

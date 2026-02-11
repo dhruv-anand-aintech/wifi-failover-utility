@@ -34,21 +34,29 @@ class WiFiFailoverWorker(context: Context, params: WorkerParameters) : Coroutine
             // Check daemon status from Worker
             val status = api.getStatus(secret)
 
-            if (status.daemon_online) {
-                // Daemon is online, reset counter
-                sharedPrefs.edit().putInt(OFFLINE_COUNT_KEY, 0).apply()
-            } else {
-                // Daemon is offline, increment counter
-                val offlineCount = sharedPrefs.getInt(OFFLINE_COUNT_KEY, 0) + 1
-                sharedPrefs.edit().putInt(OFFLINE_COUNT_KEY, offlineCount).apply()
+            when (status.daemon_status) {
+                "online" -> {
+                    // Daemon is online, reset counter
+                    sharedPrefs.edit().putInt(OFFLINE_COUNT_KEY, 0).apply()
+                }
+                "paused" -> {
+                    // Daemon is paused (screen locked/sleeping), reset counter
+                    // Don't trigger failover when computer is asleep
+                    sharedPrefs.edit().putInt(OFFLINE_COUNT_KEY, 0).apply()
+                }
+                "offline" -> {
+                    // Daemon is offline, increment counter
+                    val offlineCount = sharedPrefs.getInt(OFFLINE_COUNT_KEY, 0) + 1
+                    sharedPrefs.edit().putInt(OFFLINE_COUNT_KEY, offlineCount).apply()
 
-                if (offlineCount >= OFFLINE_THRESHOLD) {
-                    // Enable hotspot when daemon is offline
-                    val hotspotEnabled = hotspotService.enableHotspot()
-                    if (hotspotEnabled) {
-                        showNotification("WiFi Failover", "Daemon offline - hotspot enabled")
-                    } else {
-                        showNotification("WiFi Failover", "Daemon offline - enable hotspot manually")
+                    if (offlineCount >= OFFLINE_THRESHOLD) {
+                        // Enable hotspot when daemon is offline
+                        val hotspotEnabled = hotspotService.enableHotspot()
+                        if (hotspotEnabled) {
+                            showNotification("WiFi Failover", "Daemon offline - hotspot enabled")
+                        } else {
+                            showNotification("WiFi Failover", "Daemon offline - enable hotspot manually")
+                        }
                     }
                 }
             }

@@ -9,6 +9,7 @@ import retrofit2.http.POST
 import retrofit2.http.Header
 
 data class StatusResponse(
+    val daemon_status: String = "offline",  // "online", "paused", or "offline"
     val daemon_online: Boolean = false,
     val daemon_last_heartbeat: Long = 0,
     val time_since_heartbeat: Long = 0,

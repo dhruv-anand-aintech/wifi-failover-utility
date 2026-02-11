@@ -89,20 +89,28 @@ class PollingService : Service() {
                 val api = WorkerApi.create(preferences.workerUrl)
                 val status = api.getStatus(preferences.workerSecret)
 
-                if (status.daemon_online) {
-                    // Daemon is online, reset counter
-                    daemonOfflineCount = 0
-                } else {
-                    // Daemon is offline, increment counter
-                    daemonOfflineCount++
+                when (status.daemon_status) {
+                    "online" -> {
+                        // Daemon is online, reset counter
+                        daemonOfflineCount = 0
+                    }
+                    "paused" -> {
+                        // Daemon is paused (screen locked/sleeping), reset counter
+                        // Don't trigger failover when computer is asleep
+                        daemonOfflineCount = 0
+                    }
+                    "offline" -> {
+                        // Daemon is offline, increment counter
+                        daemonOfflineCount++
 
-                    if (daemonOfflineCount >= DAEMON_OFFLINE_THRESHOLD) {
-                        // Enable hotspot when daemon is offline
-                        val hotspotEnabled = hotspotService.enableHotspot()
-                        if (hotspotEnabled) {
-                            showNotification("WiFi Failover", "Daemon offline - hotspot enabled")
-                        } else {
-                            showNotification("WiFi Failover", "Daemon offline - enable hotspot manually")
+                        if (daemonOfflineCount >= DAEMON_OFFLINE_THRESHOLD) {
+                            // Enable hotspot when daemon is offline
+                            val hotspotEnabled = hotspotService.enableHotspot()
+                            if (hotspotEnabled) {
+                                showNotification("WiFi Failover", "Daemon offline - hotspot enabled")
+                            } else {
+                                showNotification("WiFi Failover", "Daemon offline - enable hotspot manually")
+                            }
                         }
                     }
                 }
