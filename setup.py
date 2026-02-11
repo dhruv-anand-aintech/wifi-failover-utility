@@ -10,19 +10,23 @@ class PostInstallCommand(_install):
 
     def run(self):
         _install.run(self)
-        print("\n" + "="*80)
-        print("WiFi Failover Utility - Setup Wizard")
-        print("="*80 + "\n")
-        print("Running interactive setup...\n")
 
-        # Import after installation so all dependencies are available
-        from wifi_failover.cli import setup_interactive
+        # Only run setup on actual pip install, not during wheel builds
+        # Check if we're being run as part of a pip install (not a build)
+        import os
+        if "pip" in os.environ.get("_", ""):
+            try:
+                print("\n" + "="*80)
+                print("WiFi Failover Utility - Setup Wizard")
+                print("="*80 + "\n")
+                print("Running interactive setup...\n")
 
-        try:
-            setup_interactive()
-        except Exception as e:
-            print(f"\n⚠️  Setup wizard failed: {e}")
-            print("You can run setup later with: wifi-failover setup\n")
+                from wifi_failover.cli import setup_interactive
+                setup_interactive()
+            except Exception:
+                # If setup fails, just warn but don't crash install
+                print("\n⚠️  Setup wizard couldn't launch automatically.")
+                print("You can run it later with: wifi-failover setup\n")
 
 
 setup(
