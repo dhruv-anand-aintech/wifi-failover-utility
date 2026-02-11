@@ -48,18 +48,19 @@ WORKER_STATUS=$(curl -s "https://wifi-failover.dhruv-anand.workers.dev/api/statu
 echo "   time_since_heartbeat: ${WORKER_STATUS}ms (should be > 12000ms for offline)"
 echo ""
 
-# Resume
-echo "7. Resuming heartbeats..."
-wifi-failover resume-heartbeat
-sleep 5
-
-# Check Worker status after resume
-echo ""
-echo "8. Verifying heartbeats resumed..."
-WORKER_STATUS=$(curl -s "https://wifi-failover.dhruv-anand.workers.dev/api/status?secret=dhruv-secret" | jq '.time_since_heartbeat')
-echo "   time_since_heartbeat: ${WORKER_STATUS}ms (should be < 5000ms)"
+echo "7. Daemon is now PAUSED and simulating OFFLINE"
+echo "   ✓ Use 'wifi-failover resume-heartbeat' to resume when testing is complete"
 echo ""
 
 echo "==============================================="
-echo "Test complete!"
+echo "Test complete - Daemon PAUSED!"
 echo "==============================================="
+echo ""
+echo "Android App Testing:"
+echo "  - Watch logcat: adb logcat 'WiFiFailoverWorker' -v time"
+echo "  - Verify offline counter increments every 5 seconds"
+echo "  - After 2 consecutive offline checks, hotspot should enable"
+echo "  - Watch adb logcat for: 'Offline count exceeded threshold'"
+echo ""
+echo "When done testing, resume with:"
+echo "  wifi-failover resume-heartbeat"
