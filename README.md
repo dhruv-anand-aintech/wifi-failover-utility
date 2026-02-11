@@ -23,74 +23,79 @@ Automatic failover from WiFi to Android hotspot. When your primary WiFi network 
 
 - **macOS** (tested on Big Sur+)
 - **Android phone** (Android 11+) with WiFi Failover App (native app - see `android-app/`)
-- **Cloudflare account** (free tier is sufficient)
+- **Cloudflare account** with Workers KV (may require paid plan - ~$5/month)
 - **Python 3.8+**
 
-## Quick Start
+> **Note:** Cloudflare Workers KV is required for storing daemon heartbeat state. The free tier may have limitations. A paid Workers plan (~$5/month) is recommended for reliable operation.
 
-### Option 1: Clone + `uv run` (Fastest - No Installation)
-```bash
-git clone https://github.com/dhruv-anand-aintech/wifi-failover-utility.git
-cd wifi-failover-utility
-uv run wifi_failover_setup.py
-```
-Uses isolated environment with inline dependencies (PEP 723).
+## Quick Start (5 Minutes)
 
-### Option 2: Install with pip (Most Compatible)
+### 1. Install macOS Daemon
+
 ```bash
+# Install via pip
 pip install wifi-failover-utility
+
+# Run interactive setup
 wifi-failover setup
 ```
 
-### Option 3: Install with uv
+The setup wizard will guide you through:
+- Configuring your phone's hotspot SSID
+- Entering Cloudflare Worker URL & secret
+- Storing hotspot password securely in macOS Keychain
+- Auto-starting the daemon
+
+### 2. Deploy Cloudflare Worker
+
+Follow [CLOUDFLARE_SETUP.md](CLOUDFLARE_SETUP.md) to deploy the relay Worker.
+
+You'll need:
+- A Cloudflare account with Workers KV enabled
+- The Worker URL (e.g., `https://wifi-failover.youraccount.workers.dev`)
+- A secret string for authentication
+
+### 3. Install Android App
+
+Download the APK and install:
 ```bash
-uv pip install wifi-failover-utility
-wifi-failover setup
+adb install wifi-failover-v1.0.apk
 ```
 
-All methods launch an interactive setup wizard that configures:
-- Phone's hotspot SSID
-- Cloudflare Worker URL & Secret
-- Hotspot password (saved securely to Keychain)
-- Optional daemon auto-start
-
-### Step 3: Deploy Cloudflare Worker (if you don't have one)
-
-See [CLOUDFLARE_SETUP.md](CLOUDFLARE_SETUP.md) for detailed instructions.
-
-The Worker URL and secret will be used in the setup wizard.
-
-### Step 4: Install Android App
-
+Or build from source:
 ```bash
-# Build and install the native app
 cd android-app
-./gradlew installDebug
-
-# Or transfer the APK and install via adb
-adb install android-app/app/build/outputs/apk/debug/app-debug.apk
+./gradlew assembleRelease
+adb install app/build/outputs/apk/release/app-release-unsigned.apk
 ```
 
-**Setup on phone:**
-1. Open WiFi Failover app
-2. Tap "Enable Device Admin" and grant permission
-3. Enter Cloudflare Worker URL
-4. Enter Worker Secret
-5. Enter your hotspot SSID
+**Configure the app:**
+1. Open "WiFi Failover" app
+2. Go to Settings → Accessibility → Enable "WiFi Failover" service
+3. Enter your Cloudflare Worker URL
+4. Enter your Worker secret
+5. Enter your phone's hotspot SSID
 6. Tap "Start Monitoring"
-7. App will auto-start on device reboot
 
-See [android-app/README.md](android-app/README.md) for detailed instructions.
+The app will now poll every 5 seconds and automatically enable hotspot when the daemon goes offline.
 
-### Step 5: Start Monitoring
+### 4. Verify It's Working
 
-After setup completes, the daemon will start automatically.
-
-Or start manually:
 ```bash
-wifi-failover start     # Foreground (for testing)
-wifi-failover daemon    # Background
+# Check daemon status
+wifi-failover status
+
+# Test offline detection (pauses heartbeats for 20 seconds)
+wifi-failover pause-heartbeat
+
+# Watch Android logs to verify offline detection
+adb logcat | grep WiFiFailoverWorker
+
+# Resume heartbeats
+wifi-failover resume-heartbeat
 ```
+
+That's it! Your Mac will now automatically failover to your phone's hotspot when WiFi goes down.
 
 ## Installation as Daemon
 
