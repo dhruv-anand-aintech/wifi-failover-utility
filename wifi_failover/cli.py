@@ -595,15 +595,29 @@ def show_status():
     print(f"  Worker: {config.get_worker_url()}")
 
     print("\nLogs:")
-    log_file = Path("/tmp/wifi-failover/monitor.log")
-    if log_file.exists():
-        print(f"  {log_file}")
-        print("\n  Latest entries:")
-        with open(log_file) as f:
-            lines = f.readlines()[-10:]
-            for line in lines:
-                print(f"  {line.rstrip()}")
-    else:
+    # Try both log locations: home directory and /tmp
+    log_files = [
+        Path.home() / ".wifi-failover-logs" / "monitor.log",
+        Path("/tmp/wifi-failover/monitor.log")
+    ]
+
+    log_found = False
+    for log_file in log_files:
+        try:
+            if log_file.exists():
+                print(f"  {log_file}")
+                print("\n  Latest entries:")
+                with open(log_file) as f:
+                    lines = f.readlines()[-10:]
+                    for line in lines:
+                        print(f"  {line.rstrip()}")
+                log_found = True
+                break
+        except (PermissionError, OSError):
+            # Skip if we don't have permission to access this log file
+            continue
+
+    if not log_found:
         print("  No logs found. Monitor hasn't been started yet.")
 
 
