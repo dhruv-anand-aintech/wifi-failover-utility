@@ -2,6 +2,7 @@ package com.wififailover.app.service
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityServiceInfo
+import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -17,8 +18,35 @@ class HotspotAccessibilityService : AccessibilityService() {
     private val TOGGLE_COOLDOWN_MS = 5000L // 5 second cooldown between toggle clicks
     private var hotspotEnabledAt = 0L // Timestamp when hotspot was successfully enabled
     private val HOTSPOT_STABLE_DURATION_MS = 2000L // Keep window closed for 2 seconds after successful enable
+    private var shouldEnableHotspot = false // Flag: only act when explicitly requested
+    private var enableRequestTime = 0L // When was enable requested
+    private val ENABLE_REQUEST_TIMEOUT_MS = 30000L // Stop trying after 30 seconds
+
+    companion object {
+        private var instance: HotspotAccessibilityService? = null
+
+        fun requestHotspotEnable() {
+            instance?.let {
+                it.shouldEnableHotspot = true
+                it.enableRequestTime = System.currentTimeMillis()
+                Log.d("HotspotA11yService", "🔥 Hotspot enable requested - service will now act on settings")
+            }
+        }
+
+        fun cancelHotspotEnable() {
+            instance?.let {
+                if (it.shouldEnableHotspot) {
+                    it.shouldEnableHotspot = false
+                    Log.d("HotspotA11yService", "🚫 Hotspot enable cancelled - daemon recovered")
+                    // Close settings if it's open
+                    it.closeWindow()
+                }
+            }
+        }
+    }
 
     override fun onServiceConnected() {
+        instance = this
         Log.d(tag, "Accessibility service connected")
         val info = AccessibilityServiceInfo().apply {
             eventTypes = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED or AccessibilityEvent.TYPE_VIEW_CLICKED
@@ -44,9 +72,25 @@ class HotspotAccessibilityService : AccessibilityService() {
 
     private fun checkAndClickHotspotToggle() {
         try {
+            // Check if enable request has timed out
+            if (shouldEnableHotspot && System.currentTimeMillis() - enableRequestTime > ENABLE_REQUEST_TIMEOUT_MS) {
+                Log.e(tag, "⏱️  Enable request timed out after 30s - could not enable hotspot")
+                shouldEnableHotspot = false
+
+                // Notify user of failure
+                val notificationManager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+                val notification = androidx.core.app.NotificationCompat.Builder(applicationContext, "wifi_failover_alert")
+                    .setContentTitle("WiFi Failover - Hotspot Failed")
+                    .setContentText("Could not enable hotspot automatically. Please enable manually.")
+                    .setSmallIcon(android.R.drawable.ic_dialog_alert)
+                    .setPriority(androidx.core.app.NotificationCompat.PRIORITY_HIGH)
+                    .setAutoCancel(true)
+                    .build()
+                notificationManager.notify(1002, notification)
+            }
+
             // If hotspot was recently enabled, don't keep opening settings
             if (hotspotEnabledAt > 0 && System.currentTimeMillis() - hotspotEnabledAt < HOTSPOT_STABLE_DURATION_MS) {
-                Log.d(tag, "Hotspot recently enabled - skipping check for stability")
                 handler.postDelayed(checkRunnable, 500)
                 return
             }
@@ -57,7 +101,8 @@ class HotspotAccessibilityService : AccessibilityService() {
             }
 
             val packageName = rootNode.packageName?.toString() ?: ""
-            if (packageName.contains("settings") || packageName.contains("wirelesssettings")) {
+            // Only act on settings if we're explicitly trying to enable hotspot
+            if ((packageName.contains("settings") || packageName.contains("wirelesssettings")) && shouldEnableHotspot) {
                 val allText = collectAllText(rootNode)
 
                 if (allText.contains("personal hotspot", ignoreCase = true) ||
@@ -79,6 +124,7 @@ class HotspotAccessibilityService : AccessibilityService() {
                         if (isHotspotOn) {
                             Log.i(tag, "✅ Hotspot already ON - closing settings")
                             hotspotEnabledAt = System.currentTimeMillis() // Mark that hotspot is enabled
+                            shouldEnableHotspot = false // Clear flag - we're done
                             closeWindow()
                             return
                         }
@@ -468,6 +514,7 @@ class HotspotAccessibilityService : AccessibilityService() {
     override fun onDestroy() {
         Log.d(tag, "Accessibility service destroyed")
         handler.removeCallbacks(checkRunnable)
+        instance = null
         super.onDestroy()
     }
 }

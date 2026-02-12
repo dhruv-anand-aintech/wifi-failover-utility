@@ -57,16 +57,22 @@ You'll need:
 
 ### 3. Install Android App
 
-Download the APK and install:
+**Option A: Install via ADB (Recommended)**
 ```bash
-adb install wifi-failover-v1.0.apk
+adb install wifi-failover-v1.0-release.apk
 ```
 
-Or build from source:
+**Option B: Manual Installation**
+1. Transfer APK to phone
+2. Open file manager and tap the APK
+3. If blocked, tap "Settings" → Enable "Install unknown apps" for your file manager
+4. Go back and tap the APK again to install
+
+**Option C: Build from Source**
 ```bash
 cd android-app
-./gradlew assembleRelease
-adb install app/build/outputs/apk/release/app-release-unsigned.apk
+./gradlew assembleDebug
+adb install app/build/outputs/apk/debug/app-debug.apk
 ```
 
 **Configure the app:**

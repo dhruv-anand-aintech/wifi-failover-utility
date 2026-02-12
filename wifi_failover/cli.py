@@ -696,6 +696,9 @@ def main():
     subparsers.add_parser("pause-heartbeat", help="Pause daemon heartbeats (simulate offline, for testing)")
     subparsers.add_parser("resume-heartbeat", help="Resume daemon heartbeats")
 
+    # WiFi reorder command
+    subparsers.add_parser("reorder-wifi", help="Interactive TUI to reorder WiFi network priorities")
+
     args = parser.parse_args()
 
     # Check if configuration exists
@@ -739,6 +742,9 @@ def main():
         pause_heartbeat()
     elif args.command == "resume-heartbeat":
         resume_heartbeat()
+    elif args.command == "reorder-wifi":
+        from .wifi_reorder import main as reorder_main
+        reorder_main()
     else:
         parser.print_help()
 

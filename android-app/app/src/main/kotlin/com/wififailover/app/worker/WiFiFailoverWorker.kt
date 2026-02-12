@@ -22,6 +22,7 @@ class WiFiFailoverWorker(context: Context, params: WorkerParameters) : Coroutine
     companion object {
         private const val OFFLINE_COUNT_KEY = "daemon_offline_count"
         private const val HOTSPOT_ENABLED_KEY = "hotspot_enabled_by_failover"
+        private const val HOTSPOT_ENABLED_TIME_KEY = "hotspot_enabled_time"
         private const val POLL_COUNT_KEY = "poll_count"
         private const val OFFLINE_THRESHOLD = 2  // Enable hotspot after 2 consecutive offline checks (~10 seconds)
         private const val TAG = "WiFiFailoverWorker"
@@ -41,6 +42,28 @@ class WiFiFailoverWorker(context: Context, params: WorkerParameters) : Coroutine
 
             // Get status from Worker
             val status = api.getStatus(secret)
+
+            // Handle null/expired KV entries
+            if (status.time_since_heartbeat == null) {
+                Log.w(TAG, "⚠️ Worker returned null heartbeat - treating as offline (KV expired?)")
+                // Treat as offline with max timestamp
+                val offlineCount = sharedPrefs.getInt(OFFLINE_COUNT_KEY, 0) + 1
+                sharedPrefs.edit().putInt(OFFLINE_COUNT_KEY, offlineCount).apply()
+
+                if (offlineCount >= OFFLINE_THRESHOLD && !sharedPrefs.getBoolean(HOTSPOT_ENABLED_KEY, false)) {
+                    Log.e(TAG, "🚨 THRESHOLD REACHED - Enabling hotspot (KV expired)")
+                    val hotspotEnabled = hotspotService.enableHotspot()
+                    if (hotspotEnabled) {
+                        sharedPrefs.edit()
+                            .putBoolean(HOTSPOT_ENABLED_KEY, true)
+                            .putLong(HOTSPOT_ENABLED_TIME_KEY, System.currentTimeMillis())
+                            .apply()
+                        showNotification("WiFi Failover", "Daemon offline - hotspot enabled")
+                    }
+                }
+                scheduleNextPoll()
+                return Result.success()
+            }
 
             // CRITICAL: Android app (not Worker) detects offline by checking heartbeat staleness
             // Daemon sends heartbeats every 2 seconds. If no heartbeat in 10+ seconds (5 cycles),
@@ -62,6 +85,13 @@ class WiFiFailoverWorker(context: Context, params: WorkerParameters) : Coroutine
 
                     if (hotspotAlreadyEnabled) {
                         Log.i(TAG, "🔴 Daemon OFFLINE but hotspot already enabled - waiting for daemon to recover")
+
+                        // Safety: If hotspot was enabled >5 minutes ago but daemon still offline, allow retry
+                        val hotspotEnabledTime = sharedPrefs.getLong(HOTSPOT_ENABLED_TIME_KEY, 0)
+                        if (System.currentTimeMillis() - hotspotEnabledTime > 300000) { // 5 minutes
+                            Log.w(TAG, "⚠️ Hotspot enabled >5min ago but still offline - allowing retry")
+                            sharedPrefs.edit().putBoolean(HOTSPOT_ENABLED_KEY, false).apply()
+                        }
                     } else {
                         // Daemon is offline (stale heartbeat), increment counter
                         val offlineCount = sharedPrefs.getInt(OFFLINE_COUNT_KEY, 0) + 1
@@ -74,7 +104,10 @@ class WiFiFailoverWorker(context: Context, params: WorkerParameters) : Coroutine
                             val hotspotEnabled = hotspotService.enableHotspot()
                             if (hotspotEnabled) {
                                 // Mark hotspot as enabled so we don't keep trying
-                                sharedPrefs.edit().putBoolean(HOTSPOT_ENABLED_KEY, true).apply()
+                                sharedPrefs.edit()
+                                    .putBoolean(HOTSPOT_ENABLED_KEY, true)
+                                    .putLong(HOTSPOT_ENABLED_TIME_KEY, System.currentTimeMillis())
+                                    .apply()
                                 showNotification("WiFi Failover", "Daemon offline - hotspot enabled")
                                 Log.i(TAG, "✅ Hotspot enabled - will not attempt again until daemon recovers")
                             } else {
@@ -84,7 +117,15 @@ class WiFiFailoverWorker(context: Context, params: WorkerParameters) : Coroutine
                     }
                 }
                 else -> {
-                    // Daemon is online and active, reset counter and hotspot flag
+                    // Daemon is online and active - cancel any pending hotspot enable and reset flags
+                    val wasHotspotEnabled = sharedPrefs.getBoolean(HOTSPOT_ENABLED_KEY, false)
+
+                    if (wasHotspotEnabled) {
+                        // Cancel pending hotspot enable since daemon is back
+                        com.wififailover.app.service.HotspotAccessibilityService.cancelHotspotEnable()
+                        Log.i(TAG, "🔄 Daemon recovered - cancelled hotspot enable")
+                    }
+
                     val pollCount = sharedPrefs.getInt(POLL_COUNT_KEY, 0) + 1
                     sharedPrefs.edit()
                         .putInt(OFFLINE_COUNT_KEY, 0)
