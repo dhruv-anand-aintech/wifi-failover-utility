@@ -58,6 +58,12 @@
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
+        <!-- Local-first control service -->
+        <service
+            android:name=".service.LocalControlService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
     </application>
 
 </manifest>

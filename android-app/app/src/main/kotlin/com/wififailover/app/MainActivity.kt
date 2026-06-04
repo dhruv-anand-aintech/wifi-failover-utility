@@ -16,15 +16,13 @@ import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.NotificationCompat
-import androidx.work.ExistingPeriodicWorkPolicy
-import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.wififailover.app.api.AcknowledgeRequest
 import com.wififailover.app.api.WorkerApi
 import com.wififailover.app.data.Preferences
 import com.wififailover.app.service.HotspotService
+import com.wififailover.app.service.LocalControlService
 import com.wififailover.app.worker.WiFiFailoverWorker
-import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -80,12 +78,9 @@ class MainActivity : AppCompatActivity() {
         checkAccessibilityService()
         addDebugLog("App started")
 
-        // Reschedule WorkManager if monitoring was enabled
-        // (in case app was killed/restarted - WorkManager tasks don't persist)
-        if (preferences.monitoringEnabled && preferences.isConfigured()) {
-            scheduleWorkManager()
-            addDebugLog("Rescheduled WorkManager (app restart)")
-        }
+        preferences.monitoringEnabled = true
+        startLocalControl()
+        addDebugLog("Local control service started")
 
         // Update status display
         updateStatus()
@@ -135,30 +130,17 @@ class MainActivity : AppCompatActivity() {
 
     private fun testFailover() {
         if (!preferences.isConfigured()) {
-            Toast.makeText(this, "Please configure all settings first", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Please configure hotspot SSID first", Toast.LENGTH_SHORT).show()
             return
         }
 
-        addDebugLog("🧪 Manual failover test triggered")
-        Toast.makeText(this, "Testing failover...", Toast.LENGTH_SHORT).show()
-
-        CoroutineScope(Dispatchers.Default).launch {
-            try {
-                val api = WorkerApi.create(preferences.workerUrl)
-                addDebugLog("📡 Sending enable command...")
-
-                // Send enable command to Worker
-                val response = api.enableHotspot(com.wififailover.app.api.EnableRequest(preferences.workerSecret))
-                addDebugLog("✓ Command response: enabled=${response.enabled}")
-
-                // Wait a moment then poll
-                Thread.sleep(2000)
-                addDebugLog("📡 Polling Worker status...")
-                pollWorker()
-            } catch (e: Exception) {
-                e.printStackTrace()
-                addDebugLog("❌ Error: ${e.message}")
-            }
+        addDebugLog("🧪 Manual local failover test triggered")
+        Toast.makeText(this, "Requesting hotspot enable...", Toast.LENGTH_SHORT).show()
+        val ok = hotspotService.enableHotspot()
+        if (ok) {
+            addDebugLog("✓ Hotspot enable requested")
+        } else {
+            addDebugLog("✗ Hotspot enable failed; check Accessibility permission")
         }
     }
 
@@ -181,8 +163,8 @@ class MainActivity : AppCompatActivity() {
         val ssid = hotspotSsidInput.text.toString().trim()
         val interval = pollingIntervalInput.text.toString().trim()
 
-        if (url.isEmpty() || secret.isEmpty() || ssid.isEmpty() || interval.isEmpty()) {
-            Toast.makeText(this, "Please fill all fields", Toast.LENGTH_SHORT).show()
+        if (ssid.isEmpty()) {
+            Toast.makeText(this, "Please fill hotspot SSID", Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -221,10 +203,15 @@ class MainActivity : AppCompatActivity() {
 
     private fun startMonitoring() {
         preferences.monitoringEnabled = true
-        scheduleWorkManager()
-        addDebugLog("▶ Monitoring started (WorkManager background service)")
-        Toast.makeText(this, "Monitoring started", Toast.LENGTH_SHORT).show()
+        WorkManager.getInstance(this).cancelUniqueWork("wifi_failover_polling")
+        startLocalControl()
+        addDebugLog("▶ Local control started on port ${LocalControlService.PORT}")
+        Toast.makeText(this, "Local control started", Toast.LENGTH_SHORT).show()
         updateStatus()
+    }
+
+    private fun startLocalControl() {
+        LocalControlService.start(this)
     }
 
     private fun scheduleWorkManager() {
@@ -241,10 +228,10 @@ class MainActivity : AppCompatActivity() {
 
     private fun stopMonitoring() {
         preferences.monitoringEnabled = false
-        // Cancel background polling via WorkManager
         WorkManager.getInstance(this).cancelUniqueWork("wifi_failover_polling")
-        addDebugLog("⏸ Monitoring stopped")
-        Toast.makeText(this, "Monitoring stopped", Toast.LENGTH_SHORT).show()
+        stopService(Intent(this, LocalControlService::class.java))
+        addDebugLog("⏸ Local control stopped")
+        Toast.makeText(this, "Local control stopped", Toast.LENGTH_SHORT).show()
         updateStatus()
     }
 
@@ -312,7 +299,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateStatus() {
         val status = if (preferences.monitoringEnabled) {
-            "Active (${preferences.pollingInterval}s interval)"
+            "Local control active (:${LocalControlService.PORT})"
         } else {
             "Inactive"
         }
@@ -322,4 +309,3 @@ class MainActivity : AppCompatActivity() {
         monitorButton.text = buttonText
     }
 }
-

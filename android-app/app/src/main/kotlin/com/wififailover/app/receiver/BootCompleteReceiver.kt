@@ -3,12 +3,8 @@ package com.wififailover.app.receiver
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import androidx.work.ExistingPeriodicWorkPolicy
-import androidx.work.PeriodicWorkRequestBuilder
-import androidx.work.WorkManager
 import com.wififailover.app.data.Preferences
-import com.wififailover.app.worker.WiFiFailoverWorker
-import java.util.concurrent.TimeUnit
+import com.wififailover.app.service.LocalControlService
 
 class BootCompleteReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -16,21 +12,8 @@ class BootCompleteReceiver : BroadcastReceiver() {
             val preferences = Preferences(context)
 
             if (preferences.monitoringEnabled && preferences.isConfigured()) {
-                schedulePollingWork(context)
+                LocalControlService.start(context)
             }
         }
-    }
-
-    private fun schedulePollingWork(context: Context) {
-        val workRequest = PeriodicWorkRequestBuilder<WiFiFailoverWorker>(
-            5,
-            TimeUnit.SECONDS
-        ).build()
-
-        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-            "wifi_failover_polling",
-            ExistingPeriodicWorkPolicy.KEEP,
-            workRequest
-        )
     }
 }

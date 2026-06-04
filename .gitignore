@@ -37,6 +37,9 @@ env/
 *~
 .DS_Store
 
+# ColGREP semantic search index
+.colgrep/
+
 # Project specific
 config.json
 .config/

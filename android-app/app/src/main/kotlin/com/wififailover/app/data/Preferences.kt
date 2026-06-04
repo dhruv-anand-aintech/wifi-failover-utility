@@ -28,8 +28,6 @@ class Preferences(context: Context) {
         set(value) = prefs.edit().putBoolean("monitoring_enabled", value).apply()
 
     fun isConfigured(): Boolean {
-        return workerUrl.isNotEmpty() &&
-               workerSecret.isNotEmpty() &&
-               hotspotSsid.isNotEmpty()
+        return hotspotSsid.isNotEmpty()
     }
 }
