@@ -1,117 +1,132 @@
-# WiFi Failover Local-First Handoff
+# Bridge Failover Handoff
 
 ## Current State
 
-Cloudflare heartbeat failover was turned off because it is a bad control plane for network-loss recovery. The deployed `wifi-failover` Worker was deleted and the user LaunchAgent `com.wifi-failover.monitor` was unloaded, disabled, and removed from `~/Library/LaunchAgents`.
+The standalone WiFi Failover Android app is retired. Phone-side behavior now
+belongs to Bridge, installed as:
 
-One root LaunchDaemon still needs manual sudo cleanup:
+```text
+tech.ainorthstar.usagepush
+```
+
+The deleted standalone package was:
+
+```text
+com.wififailover.app
+```
+
+This repo now only contains the Mac-side local monitor:
+
+```bash
+scripts/local-failover-monitor.sh
+```
+
+The user LaunchAgent for the moved repo is:
+
+```text
+~/Library/LaunchAgents/tech.ainorthstar.wifi-failover-monitor.plist
+```
+
+## Active Path
+
+Bridge hosts a foreground local HTTP control server on the phone at port
+`38788`:
+
+- `GET /health`
+- `GET /enable-hotspot`
+- `GET /enable-tailscale`
+- `GET /cancel`
+
+The Mac helper connects known host:port ADB serials, forwards that port over
+ADB, requests `enable_tailscale` through the configured updates Worker wake
+webhook when Bridge `/health` is unavailable, refreshes Bridge `/health` while
+internet is still healthy, triggers `/enable-hotspot` after repeated ping
+failures, then switches macOS Wi-Fi to the saved SSID `Dhruv's Phone`. There is
+no Cloudflare Worker, Android build, Python daemon, or launchd installer in this
+repo now.
+
+This flow only works if the Mac can still reach Bridge locally after internet
+loss. It covers upstream/WAN failure while LAN/ADB remains available. It does
+not cover total Wi-Fi/LAN loss unless the phone enables hotspot autonomously or
+ADB is available over USB. The Mac hotspot switch still runs when Bridge trigger
+fails, so a phone-side autonomous hotspot can recover the Mac.
+
+Cloudflare can be used as an out-of-band command mailbox, but only from a
+network that still works. Bridge already polls:
+
+```text
+https://updates.ainorthstar.tech/phone-wake/poll?phone_id=<phone_id>
+```
+
+and accepts `enable_hotspot` commands queued through:
+
+```text
+POST https://updates.ainorthstar.tech/phone-wake/request
+```
+
+The Worker-side stale Mac heartbeat detector is implemented in the deployed
+updates Worker. The Mac monitor POSTs `/wifi-failover/heartbeat`; when Bridge
+polls `/phone-wake/poll?phone_id=<phone_id>` and the heartbeat is stale or
+reports `internet_ok=false`, the Worker returns a synthetic `enable_hotspot`
+command and records Bridge ACKs at `/phone-wake/ack`. A Mac-side Worker request
+after total local network loss is still too late; the heartbeat and Bridge
+polling must be pre-armed while healthy.
+
+The local monitor now also uses the wake queue for `enable_tailscale` when
+Bridge is not reachable, sourced from parent repo `.env` and
+`.main-phone-remote.env`. It also derives the heartbeat URL from the configured
+wake request URL unless `WIFI_FAILOVER_HEARTBEAT_URL` is set.
+
+Emergency killswitch is centralized in the updates Worker:
+
+```bash
+scripts/wifi-failover-killswitch.sh on "overtriggering"
+```
+
+Run `scripts/wifi-failover-killswitch.sh off` to re-arm failover, and
+`scripts/wifi-failover-killswitch.sh status` to check the state. The Worker
+suppresses queued and synthetic phone wake commands while enabled, and the Mac
+monitor skips local hotspot/Tailscale wake actions after it observes the
+heartbeat response.
+
+## Verified Before Cleanup
+
+Main phone:
+
+```text
+192.168.0.110:5555 product:CPH2573IN model:CPH2573
+```
+
+Bridge health endpoint through ADB forwarding:
+
+```json
+{"ok":true,"app":"Bridge","mode":"local","port":38788}
+```
+
+Bridge hotspot request path:
+
+```bash
+curl http://127.0.0.1:38788/enable-hotspot
+networksetup -setairportnetwork en0 "Dhruv's Phone"
+```
+
+Observed logs showed Bridge opened hotspot settings and clicked the hotspot
+toggle. Android tethering state then showed SoftAP active.
+
+## Manual Root Cleanup
+
+An old system LaunchDaemon may still exist from earlier experiments. Codex
+should not run sudo commands. If it exists, D should remove it manually:
 
 ```bash
 sudo launchctl bootout system /Library/LaunchDaemons/com.dhruvanand.wifi-failover.plist
 sudo rm -f /Library/LaunchDaemons/com.dhruvanand.wifi-failover.plist
 ```
 
-Do not run those commands from Codex; ask the user to run them.
-
-## Implemented Local-First Path
-
-The Android app now starts a foreground `LocalControlService` on launch. It hosts a local NanoHTTPD server on port `38788` with:
-
-- `GET /health`
-- `GET /enable-hotspot`
-- `GET /cancel`
-
-The active path no longer depends on Cloudflare Worker status or heartbeat polling. `Preferences.isConfigured()` only requires the hotspot SSID, and boot restore starts `LocalControlService` instead of WorkManager polling.
-
-The Mac-side helper is:
+## Resume
 
 ```bash
+adb devices -l
+export WIFI_FAILOVER_PHONE_SERIAL=192.168.0.110:5555
 scripts/local-failover-monitor.sh
 ```
-
-It forwards `tcp:38788` over ADB and triggers `/enable-hotspot` after repeated ping failures.
-
-## Verified
-
-Device seen before ADB restart:
-
-```text
-adb-547df14d-6g2usO._adb-tls-connect._tcp device product:CPH2573IN model:CPH2573 device:OP595DL1
-```
-
-Builds passed:
-
-```bash
-cd android-app
-./gradlew :app:assembleDebug
-./gradlew :app:assembleRelease
-```
-
-Release APK installed successfully:
-
-```bash
-adb install -r app/build/outputs/apk/release/app-release.apk
-```
-
-App launched and health endpoint worked through ADB forwarding:
-
-```bash
-adb shell am start -n com.wififailover.app/.MainActivity
-adb forward tcp:38788 tcp:38788
-curl http://127.0.0.1:38788/health
-```
-
-Observed response:
-
-```json
-{"ok":true,"mode":"local","port":38788}
-```
-
-After enabling the app Accessibility service via ADB, `/enable-hotspot` accepted the request:
-
-```json
-{"ok":true,"action":"enable-hotspot"}
-```
-
-## Known Blocker
-
-The phone was locked when hotspot settings opened. Accessibility saw `com.android.systemui` instead of the OPPO/ColorOS settings UI, so it could not click the hotspot toggle. This confirms the main remaining constraint: the current last-mile automation needs the phone unlocked and the Settings UI visible.
-
-After this locked-screen attempt, wireless ADB became unstable. Restarting ADB cleared the connection, and `adb mdns services` did not rediscover the paired phone at that moment.
-
-## Resume Steps
-
-1. Reconnect the paired phone over wireless ADB, or pair again from Android Developer Options.
-2. Launch the app:
-
-```bash
-adb shell am start -n com.wififailover.app/.MainActivity
-adb forward tcp:38788 tcp:38788
-curl http://127.0.0.1:38788/health
-```
-
-3. Keep the phone unlocked and run:
-
-```bash
-curl http://127.0.0.1:38788/enable-hotspot
-adb logcat -d -s LocalControlService HotspotService HotspotA11yService | tail -n 120
-```
-
-4. If the OPPO settings page opens but the toggle is not clicked, inspect the live UI:
-
-```bash
-adb shell uiautomator dump /sdcard/window.xml
-adb exec-out cat /sdcard/window.xml
-```
-
-Then update `HotspotAccessibilityService` selectors for the actual ColorOS node text/resource IDs.
-
-## Better Next Architecture
-
-Keep the local service and notification actions. Treat Accessibility as best-effort only. The more reliable path is one of:
-
-- A visible foreground notification action the user can tap when the phone is locked.
-- USB/wireless ADB command path for trusted development use.
-- A rooted/Shizuku/system-permission path if fully automatic hotspot toggling is mandatory.
-
-Cloudflare can remain useful for diagnostics or history, but not for failover decisions.

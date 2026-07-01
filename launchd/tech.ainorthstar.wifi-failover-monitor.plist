@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>tech.ainorthstar.wifi-failover-monitor</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/Users/dhruvanand/Code/phone-debug/wifi-failover-utility/scripts/local-failover-monitor.sh</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/dhruvanand/Code/phone-debug/wifi-failover-utility</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>WIFI_FAILOVER_PHONE_SERIAL</key>
+    <string>192.168.0.110:5555</string>
+    <key>WIFI_FAILOVER_CHECK_HOST</key>
+    <string>8.8.8.8</string>
+    <key>WIFI_FAILOVER_CHECK_INTERVAL</key>
+    <string>5</string>
+    <key>WIFI_FAILOVER_FAILURE_THRESHOLD</key>
+    <string>3</string>
+    <key>WIFI_FAILOVER_HOTSPOT_SETTLE_SECONDS</key>
+    <string>8</string>
+  </dict>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>KeepAlive</key>
+  <true/>
+
+  <key>ThrottleInterval</key>
+  <integer>10</integer>
+
+  <key>StandardOutPath</key>
+  <string>/Users/dhruvanand/Code/phone-debug/wifi-failover-utility/logs/launchd.out.log</string>
+
+  <key>StandardErrorPath</key>
+  <string>/Users/dhruvanand/Code/phone-debug/wifi-failover-utility/logs/launchd.err.log</string>
+</dict>
+</plist>

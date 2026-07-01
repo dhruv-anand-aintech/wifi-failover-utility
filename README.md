@@ -1,306 +1,141 @@
-# WiFi Failover Utility
+# Bridge Failover Monitor
 
-Automatic failover from WiFi to Android hotspot. When your primary WiFi network loses internet connectivity, this utility automatically commands your Android phone to enable hotspot and connects your Mac to it—all without manual intervention.
+Mac-side connectivity watcher for Bridge.
 
+This repo no longer builds or ships a standalone Android app. The phone-side
+hotspot and Tailscale controls live in the existing Bridge app package:
+
+```text
+tech.ainorthstar.usagepush
 ```
-┌─ Detect connectivity loss ─────────────┐
-│  (macOS daemon polls WiFi every 30s)   │
-│                                        │
-├─ Post to Cloudflare Worker ───────────┤
-│  (triggers hotspot command)            │
-│                                        │
-├─ Android app polls Worker ────────────┤
-│  (native app, every 5 seconds)         │
-│                                        │
-├─ Phone enables hotspot ───────────────┤
-│  (automatically via native app)        │
-│                                        │
-└─ Mac connects to hotspot ─────────────┘
-   (using stored WiFi password)
-```
+
+Bridge exposes a local HTTP control server on the phone at port `38788`. This
+repo only keeps the Mac helper that forwards that port over ADB and calls
+`/enable-hotspot` after repeated connectivity failures, then switches the Mac to
+the saved hotspot SSID `Dhruv's Phone`.
 
 ## Requirements
 
-- **macOS** (tested on Big Sur+)
-- **Android phone** (Android 11+) with WiFi Failover App (native app - see `android-app/`)
-- **Cloudflare account** with Workers KV (may require paid plan - ~$5/month)
-- **Python 3.8+**
+- Bridge installed and running on the Android phone.
+- ADB connected to the phone over USB or wireless debugging.
+- Bridge Accessibility service enabled for hotspot UI automation.
 
-> **Note:** Cloudflare Workers KV is required for storing daemon heartbeat state. The free tier may have limitations. A paid Workers plan (~$5/month) is recommended for reliable operation.
+## Run
 
-## Quick Start (5 Minutes)
-
-### 1. Install macOS Daemon
+For the main phone:
 
 ```bash
-# Install via pip
-pip install wifi-failover-utility
-
-# Run interactive setup
-wifi-failover setup
+export WIFI_FAILOVER_PHONE_SERIAL=192.168.0.110:5555
+scripts/local-failover-monitor.sh
 ```
 
-The setup wizard will guide you through:
-- Configuring your phone's hotspot SSID
-- Entering Cloudflare Worker URL & secret
-- Storing hotspot password securely in macOS Keychain
-- Auto-starting the daemon
+The script:
 
-### 2. Deploy Cloudflare Worker
+1. Forwards `127.0.0.1:38788` to Bridge on the phone.
+2. Runs `adb connect` for host:port serials before forwarding, so a known
+   Wi-Fi ADB endpoint is actively attached instead of only assumed present.
+3. If Bridge `/health` is unreachable and a wake webhook is configured, POSTs
+   `enable_tailscale` to the updates Worker for the configured phone ID.
+4. Refreshes Bridge `/health` while internet is still healthy, so the local
+   ADB path is already warm before an outage.
+5. Sends a token-authenticated heartbeat to
+   `https://updates.ainorthstar.tech/wifi-failover/heartbeat` while healthy.
+   The Worker can synthesize `enable_hotspot` from stale heartbeats when Bridge
+   polls over phone data.
+6. Pings `8.8.8.8` every 5 seconds.
+7. Calls `http://127.0.0.1:38788/enable-hotspot` after 3 failures.
+8. Connects the Mac to the saved Wi-Fi network `Dhruv's Phone` if it exists,
+   even if the Bridge request fails.
 
-Follow [CLOUDFLARE_SETUP.md](CLOUDFLARE_SETUP.md) to deploy the relay Worker.
+This works when upstream internet is down but the Mac can still reach the phone
+locally over ADB, for example on the same Wi-Fi LAN or USB. If Wi-Fi/LAN itself
+is gone, this Mac cannot trigger the phone; Bridge needs an autonomous
+phone-side failover path or a live USB transport.
 
-You'll need:
-- A Cloudflare account with Workers KV enabled
-- The Worker URL (e.g., `https://wifi-failover.youraccount.workers.dev`)
-- A secret string for authentication
+## Cloud Command Path
 
-### 3. Install Android App
-
-**Option A: Install via ADB (Recommended)**
-```bash
-adb install wifi-failover-v1.0-release.apk
-```
-
-**Option B: Manual Installation**
-1. Transfer APK to phone
-2. Open file manager and tap the APK
-3. If blocked, tap "Settings" → Enable "Install unknown apps" for your file manager
-4. Go back and tap the APK again to install
-
-**Option C: Build from Source**
-```bash
-cd android-app
-./gradlew assembleDebug
-adb install app/build/outputs/apk/debug/app-debug.apk
-```
-
-**Configure the app:**
-1. Open "WiFi Failover" app
-2. Enable Accessibility Service (prompt will appear on first run)
-   - Settings → Accessibility → WiFi Failover → Enable
-3. Enter your Cloudflare Worker URL
-4. Enter your Worker secret
-5. Enter your phone's hotspot SSID
-6. Tap "Start Monitoring"
-
-The app will now poll every 5 seconds and automatically enable hotspot when the daemon goes offline.
-
-### 4. Verify It's Working
+Bridge already polls the updates Worker wake queue. A remote command can enqueue
+hotspot enablement while the phone still has cellular data:
 
 ```bash
-# Check daemon status
-wifi-failover status
-
-# Test offline detection (pauses heartbeats for 20 seconds)
-wifi-failover pause-heartbeat
-
-# Watch Android logs to verify offline detection
-adb logcat | grep WiFiFailoverWorker
-
-# Resume heartbeats
-wifi-failover resume-heartbeat
+curl -fsS -X POST https://updates.ainorthstar.tech/phone-wake/request \
+  -H "authorization: Bearer $PHONE_USAGE_INGEST_TOKEN" \
+  -H "content-type: application/json" \
+  -d '{"phone_id":"main","action":"enable_hotspot"}'
 ```
 
-That's it! Your Mac will now automatically failover to your phone's hotspot when WiFi goes down.
+This is useful from another connected device. The deployed Worker also supports
+the autonomous stale-heartbeat path: the Mac monitor POSTs heartbeat state while
+healthy, Bridge polls `/phone-wake/poll?phone_id=<phone_id>`, and the Worker
+returns a synthetic `enable_hotspot` command if the Mac heartbeat is stale or
+reports `internet_ok=false`. Bridge ACKs consumed commands through
+`/phone-wake/ack`.
 
-## Installation as Daemon
-
-To run as a background service on Mac startup:
+Emergency killswitch:
 
 ```bash
-# Copy the launchd plist template
-sudo cp launchd/com.wifi-failover.monitor.plist /Library/LaunchDaemons/
-
-# Edit the plist with your username and paths
-sudo nano /Library/LaunchDaemons/com.wifi-failover.monitor.plist
-
-# Load it
-sudo launchctl load /Library/LaunchDaemons/com.wifi-failover.monitor.plist
-
-# Verify it's running
-ps aux | grep wifi-failover
-
-# Watch logs
-tail -f /tmp/wifi-failover/monitor.log
+scripts/wifi-failover-killswitch.sh on "overtriggering"
 ```
+
+Reset it with `scripts/wifi-failover-killswitch.sh off`, and check it with
+`scripts/wifi-failover-killswitch.sh status`. When enabled, the Worker
+suppresses queued and synthetic phone wake commands, and the Mac monitor skips
+local hotspot/Tailscale wake actions after it sees the heartbeat response.
+
+## LaunchAgent
+
+The repo ships a user LaunchAgent at:
+
+```text
+launchd/tech.ainorthstar.wifi-failover-monitor.plist
+```
+
+It runs the same monitor from the moved `phone-debug` location and writes logs
+under `wifi-failover-utility/logs/`.
 
 ## Configuration
 
-Configuration is stored in `~/.config/wifi-failover/config.json`:
+```bash
+WIFI_FAILOVER_PHONE_SERIAL=192.168.0.110:5555
+WIFI_FAILOVER_PORT=38788
+WIFI_FAILOVER_CHECK_HOST=8.8.8.8
+WIFI_FAILOVER_CHECK_INTERVAL=5
+WIFI_FAILOVER_FAILURE_THRESHOLD=3
+WIFI_FAILOVER_HOTSPOT_SETTLE_SECONDS=8
+WIFI_FAILOVER_WAKE_RETRY_SECONDS=120
+WIFI_FAILOVER_HEARTBEAT_INTERVAL=10
+WIFI_FAILOVER_MAC_ID=dhruvs-macbook-pro-2
+```
+
+The wake webhook is sourced from the parent repo's `.env` and
+`.main-phone-remote.env` by default:
+
+```bash
+MAIN_PHONE_WAKE_WEBHOOK_URL=https://updates.ainorthstar.tech/phone-wake/request
+MAIN_PHONE_WAKE_WEBHOOK_TOKEN=...
+MAIN_PHONE_WAKE_PHONE_ID=cph2573
+```
+
+If `WIFI_FAILOVER_HEARTBEAT_URL` is unset, the monitor derives it from
+`MAIN_PHONE_WAKE_WEBHOOK_URL` by replacing `/phone-wake/request` with
+`/wifi-failover/heartbeat`.
+
+## Manual Checks
+
+```bash
+adb -s 192.168.0.110:5555 forward tcp:38788 tcp:38788
+curl http://127.0.0.1:38788/health
+curl http://127.0.0.1:38788/enable-hotspot
+```
+
+Expected health response:
 
 ```json
-{
-  "monitored_networks": ["901 EXT5G", "MyWiFi"],
-  "hotspot_ssid": "Dhruv's iPhone",
-  "worker_url": "https://wifi-failover.youraccount.workers.dev",
-  "worker_secret": "your-random-secret-here"
-}
+{"ok":true,"app":"Bridge","mode":"local","port":38788}
 ```
 
-Edit this file directly or rerun `wifi-failover setup` to reconfigure.
+## Removed
 
-## Commands
-
-```bash
-# Interactive setup (with option to start daemon)
-wifi-failover setup
-
-# Start monitoring in foreground (for testing)
-wifi-failover start
-
-# Start daemon in background
-wifi-failover daemon
-
-# Enable auto-start on login
-wifi-failover enable-autostart
-
-# Disable auto-start on login
-wifi-failover disable-autostart
-
-# Show current configuration and status
-wifi-failover status
-```
-
-## How It Works
-
-### macOS Daemon
-
-- Runs continuously via launchd
-- Checks WiFi network every 30 seconds
-- Tests internet connectivity with ping to 8.8.8.8
-- If 2+ consecutive failures: POSTs to Worker to enable hotspot
-- Waits for hotspot to activate, then connects via `networksetup`
-- If 3+ consecutive successes: disables hotspot command
-
-### Cloudflare Worker
-
-- Stores state in KV storage (10-min TTL)
-- **POST** `/api/command/enable` - Trigger hotspot
-- **POST** `/api/command/disable` - Cancel hotspot
-- **GET** `/api/status` - Check command status
-- **POST** `/api/acknowledge` - Confirm action completed
-
-### Android (WiFi Failover App - Native)
-
-- Runs as background WorkManager task every 5 seconds
-- GETs `/api/status` to check if hotspot should be enabled
-- Parses JSON response in Kotlin
-- If `daemon_status = "online"`: keeps hotspot disabled
-- If `daemon_status = "offline"`: enables hotspot automatically
-- POSTs `/api/acknowledge` to confirm action
-- Auto-starts on device boot via BootCompleteReceiver
-- Respects lock/sleep detection from daemon (paused status)
-
-## Troubleshooting
-
-### Daemon not running
-
-```bash
-# Check status
-ps aux | grep wifi-failover
-
-# Check launchd status
-sudo launchctl list | grep wifi-failover
-
-# View logs
-tail -f /tmp/wifi-failover/monitor.log
-```
-
-### Hotspot not triggering (Android App)
-
-- Verify "Start Monitoring" button shows "Stop Monitoring" (toggle is ON)
-- Check battery optimization: Settings → Battery → App not restricted
-- Check Accessibility Service is enabled: Settings → Accessibility → WiFi Failover
-- Check logs: `adb logcat | grep WiFiFailover`
-- Verify Worker URL and Secret are correct in app settings
-- Test Worker manually: `curl https://your-worker/health`
-- On Android 12+, some versions limit hotspot control (see limitations)
-
-### Can't connect to hotspot
-
-- Verify password is stored in Keychain:
-  ```bash
-  security find-generic-password -wa "Dhruv's iPhone"
-  ```
-- Test manual connection first:
-  ```bash
-  networksetup -setairportnetwork en0 "Dhruv's iPhone" "your-password"
-  ```
-
-### Worker not responding
-
-```bash
-curl https://your-worker/health
-curl https://your-worker/api/status
-```
-
-## File Structure
-
-```
-wifi-failover-utility/
-├── wifi_failover/
-│   ├── __init__.py
-│   ├── cli.py                  # Interactive CLI
-│   ├── config.py               # Configuration management
-│   └── monitor.py              # Main daemon logic
-├── android-app/                # Native Android app
-│   └── app/src/main/kotlin/
-├── launchd/
-│   └── com.wifi-failover.monitor.plist
-├── src/
-│   └── index.js                # Cloudflare Worker code
-├── setup.py
-├── README.md
-├── CLOUDFLARE_SETUP.md
-└── LICENSE
-```
-
-## Security Notes
-
-- Your Cloudflare Worker secret is stored in plaintext in the config file
-- Store config file securely (it contains sensitive credentials)
-- Consider rotating the secret periodically
-- Don't commit config files to version control
-
-## Limitations
-
-- Requires phone to be nearby (hotspot range ~30ft)
-- If both networks fail, system can't help
-- Hotspot password must be stored in macOS Keychain
-- Android device must have internet to enable hotspot
-- Some Android 12+ devices restrict hotspot control via WifiManager
-- App polling every 5 seconds (battery usage ~1-2% per hour)
-
-## Development
-
-```bash
-# Clone and install in development mode
-git clone https://github.com/yourusername/wifi-failover-utility.git
-cd wifi-failover-utility
-pip install -e .
-
-# Run tests
-pytest
-
-# Build distribution
-python setup.py sdist bdist_wheel
-```
-
-## License
-
-MIT License - See LICENSE file for details
-
-## Contributing
-
-Contributions welcome! Please:
-1. Fork the repository
-2. Create a feature branch
-3. Submit a pull request
-
-## Support
-
-For issues, questions, or suggestions:
-- Open a GitHub issue
-- Check [Troubleshooting](#troubleshooting) section
-- Review [CLOUDFLARE_SETUP.md](CLOUDFLARE_SETUP.md) for Worker deployment
+The old standalone `com.wififailover.app`, Cloudflare Worker heartbeat, Python
+package, launchd daemon templates, APK build outputs, and Android project were
+removed. Do not rebuild phone-side functionality here; add it to Bridge instead.
